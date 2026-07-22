@@ -9,8 +9,9 @@
 //	client := livetennisapi.New(os.Getenv("LIVETENNISAPI_KEY"))
 //
 //	page, err := client.ListMatches(ctx, livetennisapi.ListMatchesParams{
-//		Status: livetennisapi.StatusLive,
-//		Limit:  10,
+//		Status:     livetennisapi.StatusLive,
+//		Tour:       livetennisapi.TourATP,
+//		ListParams: livetennisapi.ListParams{Limit: 10},
 //	})
 //	if err != nil {
 //		return err
@@ -19,7 +20,9 @@
 //		fmt.Println(m.Tournament, m.Score)
 //	}
 //
-// A free key is self-serve at https://livetennisapi.com/subscribe/free.
+// A free key is self-serve at https://livetennisapi.com/subscribe/free. The key
+// travels as a Bearer token by default; [WithAuthMethod] switches it to the
+// X-API-Key header, which the API accepts equally.
 //
 // # Tiers
 //
@@ -73,11 +76,27 @@
 //     nil for an upcoming match that has not started, so always check it
 //     before dereferencing.
 //
+// # Tours
+//
+// [Client.ListMatches] and [Client.ListFixtures] take an optional [Tour]
+// filter, each value covering that circuit's singles and doubles draws. An
+// unrecognised tour is refused with [ErrBadRequest] and code "bad_tour", and
+// the accepted values are then on [APIError.AllowedValues] rather than buried
+// in the raw body.
+//
+// Mind that the filter's vocabulary is narrower than the one responses use:
+// filtering by [TourJuniors] returns records whose own tour field reads
+// "juniors_boys" or "juniors_girls". [Player.Tour] and [Fixture.Tour] are
+// therefore plain strings, and comparing one against a [Tour] constant will
+// silently fail to match.
+//
 // # Forward compatibility
 //
 // The API ships additive changes within v1. Fields this package does not know
 // about are ignored rather than rejected, so a server-side addition never
-// breaks an older client. Treat every field as optional.
+// breaks an older client. Treat every field as optional. [Player] gained
+// [Player.DataCompleteness] this way, which reports how much of a player's
+// biography the feed actually holds.
 //
 // # Concurrency
 //

@@ -33,6 +33,20 @@ type ListMatchesParams struct {
 	// [StatusCompleted]. Empty means the API's default, which is live.
 	Status MatchStatus
 
+	// Tour restricts results to one circuit, its singles and doubles draws
+	// alike. Empty means every tour. An unrecognised value is rejected with
+	// [ErrBadRequest] rather than quietly ignored.
+	Tour Tour
+
+	// ListParams paginates the result.
+	ListParams
+}
+
+// ListFixturesParams filters [Client.ListFixtures].
+type ListFixturesParams struct {
+	// Tour restricts results to one circuit. Empty means every tour.
+	Tour Tour
+
 	// ListParams paginates the result.
 	ListParams
 }
@@ -64,11 +78,15 @@ func (c *Client) Health(ctx context.Context) (*Health, error) {
 //
 //	page, err := client.ListMatches(ctx, livetennisapi.ListMatchesParams{
 //		Status: livetennisapi.StatusUpcoming,
+//		Tour:   livetennisapi.TourWTA,
 //	})
 func (c *Client) ListMatches(ctx context.Context, params ListMatchesParams) (*Page[Match], error) {
 	q := url.Values{}
 	if params.Status != "" {
 		q.Set("status", string(params.Status))
+	}
+	if params.Tour != "" {
+		q.Set("tour", string(params.Tour))
 	}
 	params.apply(q)
 
@@ -203,8 +221,11 @@ func (c *Client) ListCompletedMatches(ctx context.Context, params ListParams) (*
 //
 // Fixtures are name-only — the players are not yet resolved to player records,
 // so use [Client.ListMatches] with [StatusUpcoming] when you need ids.
-func (c *Client) ListFixtures(ctx context.Context, params ListParams) (*Page[Fixture], error) {
+func (c *Client) ListFixtures(ctx context.Context, params ListFixturesParams) (*Page[Fixture], error) {
 	q := url.Values{}
+	if params.Tour != "" {
+		q.Set("tour", string(params.Tour))
+	}
 	params.apply(q)
 
 	var out Page[Fixture]

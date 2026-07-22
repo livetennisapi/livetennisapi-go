@@ -137,6 +137,12 @@ type APIError struct {
 	// Body is the raw response body, kept verbatim so a payload this package
 	// failed to model is still available. May be nil.
 	Body []byte
+
+	// AllowedValues lists the values the API would have accepted, when it says
+	// so. Rejecting a tour answers 400 with
+	// {"error":"bad_tour","allowed":["atp","challenger","itf","juniors","wta"]}
+	// and this is that list. nil when the response named no alternatives.
+	AllowedValues []string
 }
 
 // Error implements error.
@@ -148,6 +154,9 @@ func (e *APIError) Error() string {
 	}
 	if e.RequiredTier != "" {
 		fmt.Fprintf(&b, ": this endpoint requires the %s tier, see %s", e.RequiredTier, pricingURL)
+	}
+	if len(e.AllowedValues) > 0 {
+		fmt.Fprintf(&b, ": allowed values are %s", strings.Join(e.AllowedValues, ", "))
 	}
 	if d := e.RateLimit.RetryAfter; d != nil && e.StatusCode == http.StatusTooManyRequests {
 		fmt.Fprintf(&b, ": retry after %s", *d)

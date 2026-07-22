@@ -1,17 +1,1 @@
-{
-  "id": 4021,
-  "name": "Carlos Alcaraz",
-  "tour": "atp",
-  "country": "ESP",
-  "ranking": 2,
-  "ranking_points": 8850,
-  "ranking_movement": "up",
-  "hand": "R",
-  "backhand": 2,
-  "birthday": "2003-05-05",
-  "is_doubles_team": false,
-  "stats": {
-    "ratings": { "elo": 2145.6, "surface_elo": { "hard": 2160.2 } },
-    "season": [{ "year": 2026, "wins": 41, "losses": 7 }]
-  }
-}
+{"backhand":null,"birthday":"2006-08-05","country":"srb","data_completeness":{"known":3,"missing":["backhand","hand"],"of":5},"hand":null,"id":2317,"is_doubles_team":false,"name":"Vlado Jankanj","ranking":1036,"ranking_movement":"down","ranking_points":17,"stats":{"ratings":{"computed":{"by_level":{"G":{"l":0,"pct":0.0,"w":0},"M":{"l":0,"pct":0.0,"w":0},"Other":{"l":14,"pct":44.0,"w":11}},"by_round":{"F":{"l":1,"pct":0.0,"w":0},"QF":{"l":1,"pct":50.0,"w":1},"R16":{"l":5,"pct":28.6,"w":2},"R32":{"l":7,"pct":50.0,"w":7},"SF":{"l":0,"pct":100.0,"w":1}},"comeback_set1_down":{"clay":{"l":3,"pct":0.0,"w":0},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":0,"pct":0.0,"w":0},"overall":{"l":3,"pct":0.0,"w":0}},"deciding_sets":{"clay":{"l":4,"pct":20.0,"w":1},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":1,"pct":0.0,"w":0},"overall":{"l":5,"pct":16.7,"w":1}},"set1":{"clay":{"l":3,"pct":86.4,"w":19},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":0,"pct":100.0,"w":3},"overall":{"l":3,"pct":88.0,"w":22}},"set2":{"clay":{"l":2,"pct":90.9,"w":20},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":1,"pct":66.7,"w":2},"overall":{"l":3,"pct":88.0,"w":22}},"set3":{"clay":{"l":0,"pct":100.0,"w":5},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":0,"pct":100.0,"w":1},"overall":{"l":0,"pct":100.0,"w":6}},"tiebreaks":{"clay":{"l":2,"pct":66.7,"w":4},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":1,"pct":0.0,"w":0},"overall":{"l":3,"pct":57.1,"w":4}},"vs_lefty":{"clay":{"l":1,"pct":50.0,"w":1},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":0,"pct":0.0,"w":0},"overall":{"l":1,"pct":50.0,"w":1}},"vs_top10":{"clay":{"l":0,"pct":0.0,"w":0},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":0,"pct":0.0,"w":0},"overall":{"l":0,"pct":0.0,"w":0}},"vs_top20":{"clay":{"l":0,"pct":0.0,"w":0},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":0,"pct":0.0,"w":0},"overall":{"l":0,"pct":0.0,"w":0}},"vs_top50":{"clay":{"l":0,"pct":0.0,"w":0},"grass":{"l":0,"pct":0.0,"w":0},"hard":{"l":0,"pct":0.0,"w":0},"overall":{"l":0,"pct":0.0,"w":0}}},"elo":null,"match_count":25,"meta":{"country":"SRB","current_rank":1169,"fullname":"Vlado Jankanj","peak_rank":1044}},"season":[{"clay_lost":"4","clay_won":"4","grass_lost":"4","grass_won":"4","hard_lost":"4","hard_won":"4","matches_lost":"4","matches_won":"4","rank":"4","season":"4","titles":"4","type":"singles"},{"clay_lost":"0","clay_won":"0","grass_lost":"0","grass_won":"0","hard_lost":"0","hard_won":"0","matches_lost":"0","matches_won":"0","rank":"0","season":"0","titles":"0","type":"singles"},{"clay_lost":"","clay_won":"","grass_lost":"","grass_won":"","hard_lost":"","hard_won":"","matches_lost":"","matches_won":"","rank":"","season":"","titles":"","type":"singles"},{"clay_lost":"2","clay_won":"2","grass_lost":"2","grass_won":"2","hard_lost":"2","hard_won":"2","matches_lost":"2","matches_won":"2","rank":"2","season":"2","titles":"2","type":"singles"},{"clay_lost":"5","clay_won":"0","grass_lost":"","grass_won":"","hard_lost":"","hard_won":"","matches_lost":"5","matches_won":"0","rank":"","season":"2024","titles":"0","type":"singles"},{"clay_lost":"6","clay_won":"8","grass_lost":"","grass_won":"","hard_lost":"3","hard_won":"1","matches_lost":"9","matches_won":"9","rank":"1078","season":"2025","titles":"0","type":"singles"}]},"tour":"atp"}

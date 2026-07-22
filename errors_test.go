@@ -21,6 +21,7 @@ func TestStatusMapsToSentinel(t *testing.T) {
 		notMatches []error
 	}{
 		{
+			// Recorded verbatim from an unauthenticated call to /matches.
 			name:       "401 unauthorized",
 			status:     http.StatusUnauthorized,
 			body:       `{"error":"unauthorized"}`,
@@ -29,6 +30,7 @@ func TestStatusMapsToSentinel(t *testing.T) {
 			notMatches: []error{ErrUpgradeRequired, ErrNotFound, ErrServerError},
 		},
 		{
+			// Recorded verbatim from /matches/21635/analysis with a FREE key.
 			name:     "403 upgrade required",
 			status:   http.StatusForbidden,
 			body:     `{"error":"upgrade_required"}`,
@@ -39,10 +41,11 @@ func TestStatusMapsToSentinel(t *testing.T) {
 			notMatches: []error{ErrUnauthorized, ErrNotFound},
 		},
 		{
-			name:       "400 bad request",
+			// Recorded verbatim from /matches?tour=bogus.
+			name:       "400 bad tour",
 			status:     http.StatusBadRequest,
-			body:       `{"error":"bad_request"}`,
-			wantCode:   "bad_request",
+			body:       `{"allowed":["atp","challenger","itf","juniors","wta"],"error":"bad_tour"}`,
+			wantCode:   "bad_tour",
 			matches:    []error{ErrBadRequest},
 			notMatches: []error{ErrUnauthorized, ErrServerError},
 		},
@@ -211,6 +214,162 @@ func TestUpgradeRequiredNamesTheTier(t *testing.T) {
 				t.Errorf("message %q should name the %s tier", err.Error(), tc.wantTier)
 			}
 		})
+	}
+}
+
+// Driven by the recorded error bodies rather than hand-typed copies, so the
+// mapping is asserted against exactly what the API sent.
+func TestRecordedErrorBodies(t *testing.T) {
+	tests := []struct {
+		name     string
+		fixture  string
+		status   int
+		wantCode string
+		wantErr  error
+		wantTier Tier
+		call     func(context.Context, *Client) error
+	}{
+		{
+			name:     "unauthenticated request",
+			fixture:  "error_401.json",
+			status:   http.StatusUnauthorized,
+			wantCode: "unauthorized",
+			wantErr:  ErrUnauthorized,
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatches(ctx, ListMatchesParams{})
+				return err
+			},
+		},
+		{
+			name:     "ULTRA endpoint on a FREE key",
+			fixture:  "error_403_upgrade_required.json",
+			status:   http.StatusForbidden,
+			wantCode: "upgrade_required",
+			wantErr:  ErrUpgradeRequired,
+			wantTier: TierUltra,
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatchAnalysis(ctx, 21635); return err },
+		},
+		{
+			name:     "BASIC endpoint on a FREE key",
+			fixture:  "error_403_history.json",
+			status:   http.StatusForbidden,
+			wantCode: "upgrade_required",
+			wantErr:  ErrUpgradeRequired,
+			wantTier: TierBasic,
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListCompletedMatches(ctx, ListParams{})
+				return err
+			},
+		},
+		{
+			name:     "unknown tour",
+			fixture:  "error_bad_tour.json",
+			status:   http.StatusBadRequest,
+			wantCode: "bad_tour",
+			wantErr:  ErrBadRequest,
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatches(ctx, ListMatchesParams{Tour: Tour("bogus")})
+				return err
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := fixture(t, tc.fixture)
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write(body)
+			}), WithMaxRetries(0))
+
+			err := tc.call(t.Context(), client)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error = %v, want match for %v", err, tc.wantErr)
+			}
+
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("error = %v, want an *APIError", err)
+			}
+			if apiErr.Code != tc.wantCode {
+				t.Errorf("Code = %q, want %q", apiErr.Code, tc.wantCode)
+			}
+			if apiErr.RequiredTier != tc.wantTier {
+				t.Errorf("RequiredTier = %q, want %q", apiErr.RequiredTier, tc.wantTier)
+			}
+		})
+	}
+}
+
+// A rejected tour names the values it would have accepted, and the client
+// surfaces that list rather than burying it in the raw body.
+func TestBadTourSurfacesAllowedValues(t *testing.T) {
+	body := fixture(t, "error_bad_tour.json")
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write(body)
+	}), WithMaxRetries(0))
+
+	_, err := client.ListMatches(t.Context(), ListMatchesParams{Tour: Tour("bogus")})
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %v, want an *APIError", err)
+	}
+	if apiErr.Code != "bad_tour" {
+		t.Errorf("Code = %q, want bad_tour", apiErr.Code)
+	}
+
+	want := []string{"atp", "challenger", "itf", "juniors", "wta"}
+	if len(apiErr.AllowedValues) != len(want) {
+		t.Fatalf("AllowedValues = %v, want %v", apiErr.AllowedValues, want)
+	}
+	for i := range want {
+		if apiErr.AllowedValues[i] != want[i] {
+			t.Errorf("AllowedValues[%d] = %q, want %q", i, apiErr.AllowedValues[i], want[i])
+		}
+	}
+
+	// Every allowed value must be a Tour constant this package exposes, or the
+	// typed constants have drifted from the API.
+	exposed := map[string]Tour{
+		"atp": TourATP, "wta": TourWTA, "challenger": TourChallenger,
+		"itf": TourITF, "juniors": TourJuniors,
+	}
+	for _, allowed := range apiErr.AllowedValues {
+		if _, ok := exposed[allowed]; !ok {
+			t.Errorf("the API accepts tour %q but this package exposes no constant for it", allowed)
+		}
+	}
+	if len(exposed) != len(apiErr.AllowedValues) {
+		t.Errorf("package exposes %d tours, API accepts %d", len(exposed), len(apiErr.AllowedValues))
+	}
+
+	// And it should be readable straight off the message.
+	if !strings.Contains(err.Error(), "atp, challenger, itf, juniors, wta") {
+		t.Errorf("message should list the allowed values, got %q", err.Error())
+	}
+}
+
+// A body with no "allowed" array must leave the field nil rather than an
+// empty non-nil slice that reads as "nothing is allowed".
+func TestAllowedValuesAbsentWhenNotOffered(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"bad_request"}`))
+	}), WithMaxRetries(0))
+
+	_, err := client.ListMatches(t.Context(), ListMatchesParams{})
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %v, want an *APIError", err)
+	}
+	if apiErr.AllowedValues != nil {
+		t.Errorf("AllowedValues = %v, want nil", apiErr.AllowedValues)
+	}
+	if strings.Contains(err.Error(), "allowed values") {
+		t.Errorf("message should not mention allowed values, got %q", err.Error())
 	}
 }
 

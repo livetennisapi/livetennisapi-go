@@ -49,7 +49,7 @@ func serveFixture(t *testing.T, name string, got *http.Request) http.HandlerFunc
 }
 
 func TestEndpointRequestShape(t *testing.T) {
-	const matchID = int64(918273)
+	const matchID = int64(21635)
 
 	tests := []struct {
 		name      string
@@ -98,70 +98,94 @@ func TestEndpointRequestShape(t *testing.T) {
 			wantQuery: url.Values{"limit": {"200"}},
 		},
 		{
+			name:    "matches filtered by tour",
+			fixture: "matches_tour_wta.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatches(ctx, ListMatchesParams{Tour: TourWTA, ListParams: ListParams{Limit: 2}})
+				return err
+			},
+			wantPath:  "/matches",
+			wantQuery: url.Values{"tour": {"wta"}, "limit": {"2"}},
+		},
+		{
+			name:    "status and tour combine",
+			fixture: "matches_live.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatches(ctx, ListMatchesParams{Status: StatusUpcoming, Tour: TourChallenger})
+				return err
+			},
+			wantPath:  "/matches",
+			wantQuery: url.Values{"status": {"upcoming"}, "tour": {"challenger"}},
+		},
+		{
 			name:     "get match",
 			fixture:  "match_detail.json",
 			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatch(ctx, matchID); return err },
-			wantPath: "/matches/918273",
+			wantPath: "/matches/21635",
 		},
 		{
 			name:     "get match score",
 			fixture:  "score.json",
 			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatchScore(ctx, matchID); return err },
-			wantPath: "/matches/918273/score",
+			wantPath: "/matches/21635/score",
 		},
 		{
 			name:    "list match events",
-			fixture: "events.json",
+			fixture: "synthetic/events.json",
 			call: func(ctx context.Context, c *Client) error {
 				_, err := c.ListMatchEvents(ctx, matchID, ListParams{Limit: 5})
 				return err
 			},
-			wantPath:  "/matches/918273/events",
+			wantPath:  "/matches/21635/events",
 			wantQuery: url.Values{"limit": {"5"}},
 		},
 		{
 			name:     "get match analysis",
-			fixture:  "analysis_uncovered.json",
+			fixture:  "synthetic/analysis_uncovered.json",
 			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatchAnalysis(ctx, matchID); return err },
-			wantPath: "/matches/918273/analysis",
+			wantPath: "/matches/21635/analysis",
 		},
 		{
 			name:    "search players",
 			fixture: "players_search.json",
 			call: func(ctx context.Context, c *Client) error {
-				_, err := c.SearchPlayers(ctx, SearchPlayersParams{Search: "nadal", ListParams: ListParams{Limit: 2}})
+				_, err := c.SearchPlayers(ctx, SearchPlayersParams{Search: "alcaraz", ListParams: ListParams{Limit: 3}})
 				return err
 			},
 			wantPath:  "/players",
-			wantQuery: url.Values{"search": {"nadal"}, "limit": {"2"}},
+			wantQuery: url.Values{"search": {"alcaraz"}, "limit": {"3"}},
 		},
 		{
 			name:     "get player",
 			fixture:  "player.json",
-			call:     func(ctx context.Context, c *Client) error { _, err := c.GetPlayer(ctx, 4021); return err },
-			wantPath: "/players/4021",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetPlayer(ctx, 2317); return err },
+			wantPath: "/players/2317",
 		},
 		{
 			name:      "list markets",
-			fixture:   "markets.json",
+			fixture:   "synthetic/markets.json",
 			call:      func(ctx context.Context, c *Client) error { _, err := c.ListMarkets(ctx, matchID); return err },
 			wantPath:  "/markets",
-			wantQuery: url.Values{"match_id": {"918273"}},
+			wantQuery: url.Values{"match_id": {"21635"}},
 		},
 		{
 			name:    "get market prices",
-			fixture: "market_prices.json",
+			fixture: "synthetic/market_prices.json",
 			call: func(ctx context.Context, c *Client) error {
 				_, err := c.GetMarketPrices(ctx, matchID, ListParams{Limit: 2, Offset: 99})
 				return err
 			},
-			wantPath: "/markets/918273/prices",
+			wantPath: "/markets/21635/prices",
 			// Offset is deliberately dropped: this endpoint takes no offset.
 			wantQuery: url.Values{"limit": {"2"}},
 		},
 		{
+			// The history envelope is identical to /matches, so a recorded
+			// completed-matches page stands in: a FREE key cannot reach
+			// /history/matches, which answers it with the 403 recorded in
+			// testdata/error_403_history.json.
 			name:    "list completed matches",
-			fixture: "history_matches.json",
+			fixture: "matches_completed.json",
 			call: func(ctx context.Context, c *Client) error {
 				_, err := c.ListCompletedMatches(ctx, ListParams{Limit: 1})
 				return err
@@ -170,10 +194,23 @@ func TestEndpointRequestShape(t *testing.T) {
 			wantQuery: url.Values{"limit": {"1"}},
 		},
 		{
-			name:     "list fixtures",
-			fixture:  "fixtures.json",
-			call:     func(ctx context.Context, c *Client) error { _, err := c.ListFixtures(ctx, ListParams{}); return err },
+			name:    "list fixtures",
+			fixture: "fixtures.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListFixtures(ctx, ListFixturesParams{})
+				return err
+			},
 			wantPath: "/fixtures",
+		},
+		{
+			name:    "fixtures filtered by tour",
+			fixture: "fixtures_tour_juniors.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListFixtures(ctx, ListFixturesParams{Tour: TourJuniors, ListParams: ListParams{Limit: 3}})
+				return err
+			},
+			wantPath:  "/fixtures",
+			wantQuery: url.Values{"tour": {"juniors"}, "limit": {"3"}},
 		},
 	}
 
@@ -232,16 +269,18 @@ func TestAuthHeaders(t *testing.T) {
 		wantUserAgent string
 	}{
 		{
-			name:          "X-API-Key by default",
+			// Bearer is the default, matching the Python and JS clients. Both
+			// headers are accepted by the API; this was verified live.
+			name:          "bearer by default",
 			apiKey:        "twjp_live_123",
-			wantAPIKey:    "twjp_live_123",
+			wantAuthoriz:  "Bearer twjp_live_123",
 			wantUserAgent: "livetennisapi-go/" + Version,
 		},
 		{
-			name:         "bearer when asked",
-			apiKey:       "twjp_live_123",
-			opts:         []Option{WithAuthMethod(AuthBearer)},
-			wantAuthoriz: "Bearer twjp_live_123",
+			name:       "X-API-Key when asked",
+			apiKey:     "twjp_live_123",
+			opts:       []Option{WithAuthMethod(AuthAPIKey)},
+			wantAPIKey: "twjp_live_123",
 		},
 		{
 			name:   "no auth header without a key",
@@ -251,13 +290,13 @@ func TestAuthHeaders(t *testing.T) {
 			name:          "custom user agent",
 			apiKey:        "twjp_live_123",
 			opts:          []Option{WithUserAgent("my-app/2.0")},
-			wantAPIKey:    "twjp_live_123",
+			wantAuthoriz:  "Bearer twjp_live_123",
 			wantUserAgent: "my-app/2.0",
 		},
 		{
-			name:       "key is trimmed",
-			apiKey:     "  twjp_live_123\n",
-			wantAPIKey: "twjp_live_123",
+			name:         "key is trimmed",
+			apiKey:       "  twjp_live_123\n",
+			wantAuthoriz: "Bearer twjp_live_123",
 		},
 	}
 
@@ -345,8 +384,9 @@ func TestRetryEventuallySucceeds(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListMatches: %v", err)
 	}
-	if page.Len() != 1 {
-		t.Errorf("page length = %d, want 1", page.Len())
+	// The recorded page holds three live matches.
+	if page.Len() != 3 {
+		t.Errorf("page length = %d, want 3", page.Len())
 	}
 	if got := attempts.Load(); got != 3 {
 		t.Errorf("attempts = %d, want 3", got)
@@ -546,5 +586,9 @@ func TestNilOptionsAndDefaults(t *testing.T) {
 	}
 	if client.maxRetries != 0 {
 		t.Errorf("maxRetries = %d, want 0 after clamping", client.maxRetries)
+	}
+	// Bearer is the default, matching the Python and JS clients.
+	if client.auth != AuthBearer {
+		t.Errorf("auth = %v, want AuthBearer", client.auth)
 	}
 }

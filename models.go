@@ -6,6 +6,30 @@ import (
 	"strings"
 )
 
+// Tour is a circuit accepted by the tour filter on [Client.ListMatches] and
+// [Client.ListFixtures].
+//
+// Each value covers its singles and doubles draws, so [TourATP] includes ATP
+// doubles and [TourJuniors] covers both the boys' and girls' Grand Slam draws.
+//
+// This is the vocabulary the API accepts as a *filter*, which is not the one it
+// returns in [Player.Tour] and [Fixture.Tour]: filtering by [TourJuniors]
+// yields records whose own tour reads "juniors_boys" or "juniors_girls". Those
+// fields are plain strings for that reason — do not compare a Tour against
+// them.
+type Tour string
+
+// The tours the filter accepts. An unrecognised value is rejected with a 400
+// carrying code "bad_tour" rather than silently ignored, so a caller never
+// receives a tour it did not ask for. See [APIError.AllowedValues].
+const (
+	TourATP        Tour = "atp"
+	TourWTA        Tour = "wta"
+	TourChallenger Tour = "challenger"
+	TourITF        Tour = "itf"
+	TourJuniors    Tour = "juniors"
+)
+
 // MatchStatus is a match's lifecycle state.
 type MatchStatus string
 
@@ -166,8 +190,13 @@ type Player struct {
 	// Name is the player's display name.
 	Name string `json:"name,omitempty"`
 
-	// Tour is the circuit: "atp", "wta", "challenger", "itf" or "juniors".
-	// Empty when unknown.
+	// Tour is the circuit this player is recorded on: "atp", "wta",
+	// "challenger", "itf", "juniors_boys" or "juniors_girls". Empty when
+	// unknown.
+	//
+	// This is a plain string, not a [Tour], because the values the API returns
+	// here are not the values it accepts as a filter — the juniors draws split
+	// into two here but are selected with the single filter [TourJuniors].
 	Tour string `json:"tour,omitempty"`
 
 	// Country is the country code. Empty when unknown.
@@ -197,9 +226,56 @@ type Player struct {
 	// than an individual.
 	IsDoublesTeam bool `json:"is_doubles_team,omitempty"`
 
+	// DataCompleteness says how much biographical detail is known for this
+	// player, so you can tell "not in the feed" from "not yet fetched" without
+	// probing. Present on every player in a match payload; lower tours carry
+	// far less detail than the main tour.
+	DataCompleteness *DataCompleteness `json:"data_completeness,omitempty"`
+
 	// Stats is populated by [Client.GetPlayer] only, never by the search
 	// endpoint. nil elsewhere.
 	Stats *PlayerStats `json:"stats,omitempty"`
+}
+
+// DataCompleteness reports how much of a player's biography is populated.
+//
+// It describes the biographical fields only — hand, backhand, birthday and the
+// like — not the ranking or the identity, so 2 known of 5 still describes a
+// perfectly usable player record.
+//
+// It does not apply to a doubles team, which has no single biography. There
+// the API sends Known and Of as null with an explanatory Note, so both are
+// pointers: null means "not applicable", which is emphatically not zero.
+// Check [DataCompleteness.Applicable] before reading them.
+type DataCompleteness struct {
+	// Known is how many of the considered fields are populated. nil for a
+	// doubles team, where the question does not apply.
+	Known *int `json:"known,omitempty"`
+
+	// Of is how many fields were considered. nil for a doubles team.
+	Of *int `json:"of,omitempty"`
+
+	// Missing names the unpopulated fields, for example ["backhand", "hand"].
+	// Empty when nothing is missing, and for a doubles team.
+	Missing []string `json:"missing,omitempty"`
+
+	// Note explains why completeness does not apply, when it does not. Set for
+	// a doubles team; empty for an individual.
+	Note string `json:"note,omitempty"`
+}
+
+// Applicable reports whether per-player completeness is meaningful for this
+// record. It is false for a doubles team, and for a nil receiver.
+func (d *DataCompleteness) Applicable() bool {
+	return d != nil && d.Known != nil && d.Of != nil
+}
+
+// Complete reports whether every considered biographical field is populated.
+// It is false when completeness does not apply at all, so a doubles team is
+// never reported complete; use [DataCompleteness.Applicable] to tell the two
+// apart.
+func (d *DataCompleteness) Complete() bool {
+	return d.Applicable() && *d.Of > 0 && *d.Known >= *d.Of
 }
 
 // PlayerStats is the cached statistics block on a single player.
@@ -442,7 +518,9 @@ type Fixture struct {
 	// EventDate is the calendar date of the fixture. Zero if absent.
 	EventDate Time `json:"event_date,omitzero"`
 
-	// Tour is the circuit. Empty when unknown.
+	// Tour is the circuit, for example "wta" or "juniors_boys". A plain string
+	// rather than a [Tour] for the reason given on [Player.Tour]: the returned
+	// vocabulary is wider than the filter's.
 	Tour string `json:"tour,omitempty"`
 
 	// Tournament is the event name. Empty when unknown.

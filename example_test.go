@@ -32,6 +32,62 @@ func ExampleNew() {
 	}
 }
 
+// Restrict results to one circuit. Each tour covers its singles and doubles
+// draws.
+func ExampleClient_ListMatches_byTour() {
+	client := livetennisapi.New(os.Getenv("LIVETENNISAPI_KEY"))
+
+	page, err := client.ListMatches(context.Background(), livetennisapi.ListMatchesParams{
+		Status: livetennisapi.StatusLive,
+		Tour:   livetennisapi.TourWTA,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, match := range page.Data {
+		fmt.Println(match.Tournament, match.Score)
+	}
+}
+
+// An unrecognised tour is rejected rather than ignored, and the error names the
+// values that would have worked.
+func ExampleAPIError_allowedValues() {
+	client := livetennisapi.New(os.Getenv("LIVETENNISAPI_KEY"))
+
+	_, err := client.ListMatches(context.Background(), livetennisapi.ListMatchesParams{
+		Tour: livetennisapi.Tour("atpp"),
+	})
+
+	var apiErr *livetennisapi.APIError
+	if errors.As(err, &apiErr) && apiErr.Code == "bad_tour" {
+		fmt.Println("allowed:", apiErr.AllowedValues)
+	}
+}
+
+// DataCompleteness says how much biography the feed holds for a player, so an
+// empty field can be read as "not in the feed" rather than "not fetched".
+func ExamplePlayer_dataCompleteness() {
+	client := livetennisapi.New(os.Getenv("LIVETENNISAPI_KEY"))
+
+	player, err := client.GetPlayer(context.Background(), 2317)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dc := player.DataCompleteness
+	switch {
+	case dc == nil || !dc.Applicable():
+		// A doubles team has no single biography to be complete.
+		fmt.Println(player.Name, "— per-player completeness does not apply")
+	case dc.Complete():
+		fmt.Println(player.Name, "— full biography")
+	default:
+		fmt.Printf("%s: %d of %d fields known, missing %v\n",
+			player.Name, *dc.Known, *dc.Of, dc.Missing)
+	}
+}
+
 // An upcoming match has no score at all, so Match.Score is nil. The Score
 // methods are nil-safe, but reading a field off it is not.
 func ExampleClient_ListMatches_upcoming() {

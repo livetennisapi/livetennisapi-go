@@ -39,13 +39,14 @@ const (
 type AuthMethod int
 
 const (
-	// AuthAPIKey sends the key as "X-API-Key", the API's documented header.
-	// This is the default.
-	AuthAPIKey AuthMethod = iota
+	// AuthBearer sends the key as "Authorization: Bearer <key>". This is the
+	// default, matching the official Python and JS clients.
+	AuthBearer AuthMethod = iota
 
-	// AuthBearer sends the key as "Authorization: Bearer". The API accepts
-	// both; use this if an intermediary strips unknown headers.
-	AuthBearer
+	// AuthAPIKey sends the key as "X-API-Key: <key>" instead. The API accepts
+	// either; use this when an intermediary strips or rewrites Authorization
+	// headers.
+	AuthAPIKey
 )
 
 // Client is a Live Tennis API client.
@@ -105,7 +106,7 @@ func WithUserAgent(ua string) Option {
 }
 
 // WithAuthMethod selects which header carries the API key. The default is
-// [AuthAPIKey].
+// [AuthBearer]; pass [AuthAPIKey] for the X-API-Key header.
 func WithAuthMethod(m AuthMethod) Option {
 	return func(c *Client) { c.auth = m }
 }
@@ -148,7 +149,7 @@ func New(apiKey string, opts ...Option) *Client {
 		apiKey:     strings.TrimSpace(apiKey),
 		baseURL:    DefaultBaseURL,
 		userAgent:  "livetennisapi-go/" + Version,
-		auth:       AuthAPIKey,
+		auth:       AuthBearer,
 		httpClient: &http.Client{Timeout: DefaultTimeout},
 		maxRetries: DefaultMaxRetries,
 		backoff:    defaultBackoff,
@@ -273,7 +274,8 @@ func (c *Client) apiError(resp *http.Response, path, endpoint string, rl RateLim
 	// not JSON at all, must fall through to the status text rather than
 	// surface as "null" — the same rule the Python and JS clients apply.
 	var payload struct {
-		Error string `json:"error"`
+		Error   string   `json:"error"`
+		Allowed []string `json:"allowed"`
 	}
 	_ = json.Unmarshal(body, &payload)
 
@@ -287,13 +289,14 @@ func (c *Client) apiError(resp *http.Response, path, endpoint string, rl RateLim
 	}
 
 	apiErr := &APIError{
-		StatusCode: resp.StatusCode,
-		Code:       payload.Error,
-		Message:    message,
-		RateLimit:  rl,
-		URL:        endpoint,
-		Header:     resp.Header,
-		Body:       body,
+		StatusCode:    resp.StatusCode,
+		Code:          payload.Error,
+		Message:       message,
+		RateLimit:     rl,
+		URL:           endpoint,
+		Header:        resp.Header,
+		Body:          body,
+		AllowedValues: payload.Allowed,
 	}
 	if resp.StatusCode == http.StatusForbidden {
 		apiErr.RequiredTier = requiredTierFor(path)
