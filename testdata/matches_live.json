@@ -1,0 +1,56 @@
+{
+  "data": [
+    {
+      "id": 918273,
+      "tournament": "Cincinnati Masters",
+      "surface": "hard",
+      "indoor": false,
+      "format": "BO3",
+      "round": "QF",
+      "status": "live",
+      "event_status": null,
+      "is_doubles": false,
+      "scheduled_time": "2026-07-22T14:30:00Z",
+      "players": {
+        "p1": {
+          "id": 4021,
+          "name": "Carlos Alcaraz",
+          "tour": "atp",
+          "country": "ESP",
+          "ranking": 2,
+          "ranking_points": 8850,
+          "ranking_movement": "up",
+          "hand": "R",
+          "backhand": 2,
+          "birthday": "2003-05-05",
+          "is_doubles_team": false
+        },
+        "p2": {
+          "id": 4088,
+          "name": "Jannik Sinner",
+          "tour": "atp",
+          "country": "ITA",
+          "ranking": 1,
+          "ranking_points": 11540,
+          "ranking_movement": "same",
+          "hand": "R",
+          "backhand": 2,
+          "birthday": "2001-08-16",
+          "is_doubles_team": false
+        }
+      },
+      "score": {
+        "sets": [1, 1],
+        "games": [[6, 3, 2], [4, 6, 1]],
+        "points": ["40", "AD"],
+        "server": 2,
+        "is_tiebreak": false,
+        "win_probability_p1": null,
+        "danger": null,
+        "timestamp": "2026-07-22T15:31:28Z"
+      },
+      "winner": null
+    }
+  ],
+  "meta": { "limit": 50, "offset": 0, "count": 1 }
+}

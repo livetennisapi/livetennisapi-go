@@ -1,0 +1,17 @@
+{
+  "id": 4021,
+  "name": "Carlos Alcaraz",
+  "tour": "atp",
+  "country": "ESP",
+  "ranking": 2,
+  "ranking_points": 8850,
+  "ranking_movement": "up",
+  "hand": "R",
+  "backhand": 2,
+  "birthday": "2003-05-05",
+  "is_doubles_team": false,
+  "stats": {
+    "ratings": { "elo": 2145.6, "surface_elo": { "hard": 2160.2 } },
+    "season": [{ "year": 2026, "wins": 41, "losses": 7 }]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "id": 77120,
+      "question": "Will Carlos Alcaraz beat Jannik Sinner?",
+      "status": "active",
+      "volume": 148230.5,
+      "liquidity": 0,
+      "end_date": "2026-07-22T20:00:00Z"
+    }
+  ],
+  "meta": { "match_id": 918273, "count": 1 }
+}

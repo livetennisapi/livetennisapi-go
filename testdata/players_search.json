@@ -1,0 +1,31 @@
+{
+  "data": [
+    {
+      "id": 3011,
+      "name": "Rafael Nadal",
+      "tour": "atp",
+      "country": "ESP",
+      "ranking": null,
+      "ranking_points": null,
+      "ranking_movement": null,
+      "hand": "L",
+      "backhand": 2,
+      "birthday": "1986-06-03",
+      "is_doubles_team": false
+    },
+    {
+      "id": 9902,
+      "name": "Nadal / Alcaraz",
+      "tour": "atp",
+      "country": "ESP",
+      "ranking": null,
+      "ranking_points": null,
+      "ranking_movement": null,
+      "hand": null,
+      "backhand": null,
+      "birthday": null,
+      "is_doubles_team": true
+    }
+  ],
+  "meta": { "limit": 50, "offset": 0, "count": 2 }
+}

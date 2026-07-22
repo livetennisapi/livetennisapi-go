@@ -1,0 +1,423 @@
+package livetennisapi
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+)
+
+// TestStatusMapsToSentinel pins the mapping every caller branches on. The
+// bodies are the ones the API actually sends: a bare {"error": "<code>"}.
+func TestStatusMapsToSentinel(t *testing.T) {
+	tests := []struct {
+		name       string
+		status     int
+		body       string
+		wantCode   string
+		matches    []error
+		notMatches []error
+	}{
+		{
+			name:       "401 unauthorized",
+			status:     http.StatusUnauthorized,
+			body:       `{"error":"unauthorized"}`,
+			wantCode:   "unauthorized",
+			matches:    []error{ErrAPI, ErrUnauthorized},
+			notMatches: []error{ErrUpgradeRequired, ErrNotFound, ErrServerError},
+		},
+		{
+			name:     "403 upgrade required",
+			status:   http.StatusForbidden,
+			body:     `{"error":"upgrade_required"}`,
+			wantCode: "upgrade_required",
+			matches:  []error{ErrAPI, ErrUpgradeRequired},
+			// The whole point of the distinction: a tier wall proves the key
+			// works, so it must never look like an auth failure.
+			notMatches: []error{ErrUnauthorized, ErrNotFound},
+		},
+		{
+			name:       "400 bad request",
+			status:     http.StatusBadRequest,
+			body:       `{"error":"bad_request"}`,
+			wantCode:   "bad_request",
+			matches:    []error{ErrBadRequest},
+			notMatches: []error{ErrUnauthorized, ErrServerError},
+		},
+		{
+			name:       "404 not found",
+			status:     http.StatusNotFound,
+			body:       `{"error":"not_found"}`,
+			wantCode:   "not_found",
+			matches:    []error{ErrNotFound},
+			notMatches: []error{ErrBadRequest},
+		},
+		{
+			name:       "429 rate limited",
+			status:     http.StatusTooManyRequests,
+			body:       `{"error":"rate_limited"}`,
+			wantCode:   "rate_limited",
+			matches:    []error{ErrRateLimited},
+			notMatches: []error{ErrServerError},
+		},
+		{
+			name:       "500 server error",
+			status:     http.StatusInternalServerError,
+			body:       `{"error":"internal"}`,
+			wantCode:   "internal",
+			matches:    []error{ErrServerError},
+			notMatches: []error{ErrServiceUnavailable, ErrBadRequest},
+		},
+		{
+			// 503 satisfies both, matching the Python and JS clients where
+			// ServiceUnavailable subclasses ServerError.
+			name:       "503 is both unavailable and a server error",
+			status:     http.StatusServiceUnavailable,
+			body:       `{"error":"service_unavailable"}`,
+			wantCode:   "service_unavailable",
+			matches:    []error{ErrServiceUnavailable, ErrServerError},
+			notMatches: []error{ErrBadRequest},
+		},
+		{
+			name:       "unmapped status still errors",
+			status:     http.StatusTeapot,
+			body:       `{"error":"teapot"}`,
+			wantCode:   "teapot",
+			matches:    []error{ErrAPI},
+			notMatches: []error{ErrBadRequest, ErrServerError},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}), WithMaxRetries(0))
+
+			_, err := client.ListMatches(t.Context(), ListMatchesParams{})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+
+			for _, want := range tc.matches {
+				if !errors.Is(err, want) {
+					t.Errorf("errors.Is(err, %v) = false, want true", want)
+				}
+			}
+			for _, unwanted := range tc.notMatches {
+				if errors.Is(err, unwanted) {
+					t.Errorf("errors.Is(err, %v) = true, want false", unwanted)
+				}
+			}
+
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("error = %v, want an *APIError", err)
+			}
+			if apiErr.StatusCode != tc.status {
+				t.Errorf("StatusCode = %d, want %d", apiErr.StatusCode, tc.status)
+			}
+			if apiErr.Code != tc.wantCode {
+				t.Errorf("Code = %q, want %q", apiErr.Code, tc.wantCode)
+			}
+			if string(apiErr.Body) != tc.body {
+				t.Errorf("Body = %q, want the raw payload %q", apiErr.Body, tc.body)
+			}
+		})
+	}
+}
+
+// A 403 on a tier-gated endpoint must map to ErrUpgradeRequired and name the
+// tier, because the API's own body says only "upgrade_required".
+func TestUpgradeRequiredNamesTheTier(t *testing.T) {
+	tests := []struct {
+		name     string
+		call     func(context.Context, *Client) error
+		wantTier Tier
+	}{
+		{
+			name:     "analysis needs ULTRA",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatchAnalysis(ctx, 1); return err },
+			wantTier: TierUltra,
+		},
+		{
+			name: "events need PRO",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatchEvents(ctx, 1, ListParams{})
+				return err
+			},
+			wantTier: TierPro,
+		},
+		{
+			name:     "markets need PRO",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.ListMarkets(ctx, 1); return err },
+			wantTier: TierPro,
+		},
+		{
+			name: "market prices need PRO",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetMarketPrices(ctx, 1, ListParams{})
+				return err
+			},
+			wantTier: TierPro,
+		},
+		{
+			name: "history needs BASIC",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListCompletedMatches(ctx, ListParams{})
+				return err
+			},
+			wantTier: TierBasic,
+		},
+		{
+			// A FREE-floor endpoint has no upgrade to suggest, so the tier is
+			// left empty rather than guessed at.
+			name: "a free endpoint names no tier",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatches(ctx, ListMatchesParams{})
+				return err
+			},
+			wantTier: "",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"error":"upgrade_required"}`))
+			}), WithMaxRetries(0))
+
+			err := tc.call(t.Context(), client)
+
+			if !errors.Is(err, ErrUpgradeRequired) {
+				t.Fatalf("error = %v, want ErrUpgradeRequired", err)
+			}
+			if errors.Is(err, ErrUnauthorized) {
+				t.Error("a tier wall must not match ErrUnauthorized: the key is valid")
+			}
+
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("error = %v, want an *APIError", err)
+			}
+			if apiErr.RequiredTier != tc.wantTier {
+				t.Errorf("RequiredTier = %q, want %q", apiErr.RequiredTier, tc.wantTier)
+			}
+			if tc.wantTier != "" && !strings.Contains(err.Error(), string(tc.wantTier)) {
+				t.Errorf("message %q should name the %s tier", err.Error(), tc.wantTier)
+			}
+		})
+	}
+}
+
+// The rate-limit budget must survive onto the error, since 429 is exactly when
+// the caller needs to know how long to wait.
+func TestAPIErrorCarriesRateLimit(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-RateLimit-Limit", "30")
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", "1784734349")
+		w.Header().Set("Retry-After", "59")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"rate_limited"}`))
+	}), WithMaxRetries(0))
+
+	_, err := client.ListMatches(t.Context(), ListMatchesParams{})
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %v, want an *APIError", err)
+	}
+	if got := apiErr.RateLimit.LimitOr(-1); got != 30 {
+		t.Errorf("Limit = %d, want 30", got)
+	}
+	// Zero remaining is real data, not a missing header.
+	if got := apiErr.RateLimit.RemainingOr(-1); got != 0 {
+		t.Errorf("Remaining = %d, want 0", got)
+	}
+	if got := apiErr.RateLimit.RetryAfterOr(0); got != 59*time.Second {
+		t.Errorf("RetryAfter = %v, want 59s", got)
+	}
+	if want := time.Unix(1784734349, 0).UTC(); !apiErr.RateLimit.Reset.Equal(want) {
+		t.Errorf("Reset = %v, want %v", apiErr.RateLimit.Reset, want)
+	}
+	if !strings.Contains(err.Error(), "59s") {
+		t.Errorf("a 429 message should mention the wait, got %q", err.Error())
+	}
+}
+
+func TestErrorMessageFallbacks(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantCode string
+		wantMsg  string
+	}{
+		{name: "code from body", body: `{"error":"upgrade_required"}`, wantCode: "upgrade_required", wantMsg: "upgrade_required"},
+		// A null or empty code must fall through to the status text rather
+		// than surface as the literal string "null".
+		{name: "null code falls back", body: `{"error":null}`, wantMsg: "Forbidden"},
+		{name: "empty code falls back", body: `{"error":""}`, wantMsg: "Forbidden"},
+		{name: "non-JSON body falls back", body: `<html>nope</html>`, wantMsg: "Forbidden"},
+		{name: "empty body falls back", body: ``, wantMsg: "Forbidden"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tc.body))
+			}), WithMaxRetries(0))
+
+			_, err := client.ListMatches(t.Context(), ListMatchesParams{})
+
+			var apiErr *APIError
+			if !errors.As(err, &apiErr) {
+				t.Fatalf("error = %v, want an *APIError", err)
+			}
+			if apiErr.Code != tc.wantCode {
+				t.Errorf("Code = %q, want %q", apiErr.Code, tc.wantCode)
+			}
+			if apiErr.Message != tc.wantMsg {
+				t.Errorf("Message = %q, want %q", apiErr.Message, tc.wantMsg)
+			}
+		})
+	}
+}
+
+func TestParseRateLimitHeaders(t *testing.T) {
+	tests := []struct {
+		name           string
+		headers        map[string]string
+		wantLimit      int
+		wantRemaining  int
+		wantRetryAfter time.Duration
+		wantResetUnix  int64
+		wantKnown      bool
+	}{
+		{
+			// Captured verbatim from a real anonymous call to the production
+			// API on 2026-07-22.
+			name: "real headers from the API",
+			headers: map[string]string{
+				"X-RateLimit-Limit":     "30",
+				"X-RateLimit-Remaining": "29",
+				"X-RateLimit-Reset":     "1784734349",
+				"Retry-After":           "60",
+			},
+			wantLimit: 30, wantRemaining: 29, wantRetryAfter: 60 * time.Second,
+			wantResetUnix: 1784734349, wantKnown: true,
+		},
+		{
+			name:      "no headers at all",
+			headers:   map[string]string{},
+			wantLimit: -1, wantRemaining: -1, wantKnown: false,
+		},
+		{
+			name:      "unparseable values are treated as absent",
+			headers:   map[string]string{"X-RateLimit-Limit": "lots", "X-RateLimit-Remaining": ""},
+			wantLimit: -1, wantRemaining: -1, wantKnown: false,
+		},
+		{
+			name:      "exhausted budget is not the same as absent",
+			headers:   map[string]string{"X-RateLimit-Remaining": "0"},
+			wantLimit: -1, wantRemaining: 0, wantKnown: true,
+		},
+		{
+			name:          "a non-positive reset carries no information",
+			headers:       map[string]string{"X-RateLimit-Reset": "0"},
+			wantLimit:     -1,
+			wantRemaining: -1,
+			wantKnown:     false,
+		},
+		{
+			name:           "fractional Retry-After",
+			headers:        map[string]string{"Retry-After": "1.5"},
+			wantLimit:      -1,
+			wantRemaining:  -1,
+			wantRetryAfter: 1500 * time.Millisecond,
+			wantKnown:      true,
+		},
+		{
+			name:          "negative Retry-After is ignored",
+			headers:       map[string]string{"Retry-After": "-5"},
+			wantLimit:     -1,
+			wantRemaining: -1,
+			wantKnown:     false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			header := http.Header{}
+			for key, value := range tc.headers {
+				header.Set(key, value)
+			}
+
+			rl := parseRateLimit(header)
+
+			if got := rl.LimitOr(-1); got != tc.wantLimit {
+				t.Errorf("Limit = %d, want %d", got, tc.wantLimit)
+			}
+			if got := rl.RemainingOr(-1); got != tc.wantRemaining {
+				t.Errorf("Remaining = %d, want %d", got, tc.wantRemaining)
+			}
+			if got := rl.RetryAfterOr(0); got != tc.wantRetryAfter {
+				t.Errorf("RetryAfter = %v, want %v", got, tc.wantRetryAfter)
+			}
+			if tc.wantResetUnix != 0 {
+				if got := rl.Reset.Unix(); got != tc.wantResetUnix {
+					t.Errorf("Reset = %d, want %d", got, tc.wantResetUnix)
+				}
+			} else if !rl.Reset.IsZero() {
+				t.Errorf("Reset = %v, want the zero time", rl.Reset)
+			}
+			if got := rl.Known(); got != tc.wantKnown {
+				t.Errorf("Known() = %v, want %v", got, tc.wantKnown)
+			}
+		})
+	}
+}
+
+// Retry-After also accepts an HTTP-date, in case an intermediary rewrites the
+// delta-seconds form the API emits.
+func TestParseRetryAfterHTTPDate(t *testing.T) {
+	future := time.Now().Add(30 * time.Second).UTC().Format(http.TimeFormat)
+	got, ok := parseRetryAfter(future)
+	if !ok {
+		t.Fatal("an HTTP-date Retry-After should parse")
+	}
+	if got < 25*time.Second || got > 31*time.Second {
+		t.Errorf("delay = %v, want roughly 30s", got)
+	}
+
+	past := time.Now().Add(-time.Hour).UTC().Format(http.TimeFormat)
+	got, ok = parseRetryAfter(past)
+	if !ok || got != 0 {
+		t.Errorf("a past date should yield 0, got %v (ok=%v)", got, ok)
+	}
+}
+
+func TestConnectionErrorUnwraps(t *testing.T) {
+	cause := errors.New("dial tcp: refused")
+	err := error(&ConnectionError{URL: "https://example.test/health", Err: cause})
+
+	if !errors.Is(err, ErrConnection) || !errors.Is(err, ErrAPI) {
+		t.Error("a ConnectionError should match ErrConnection and ErrAPI")
+	}
+	if errors.Is(err, ErrTimeout) {
+		t.Error("a refusal is not a timeout")
+	}
+	if !errors.Is(err, cause) {
+		t.Error("the underlying cause should stay reachable")
+	}
+
+	timeout := error(&ConnectionError{URL: "u", Timeout: true, Err: context.DeadlineExceeded})
+	if !errors.Is(timeout, ErrTimeout) || !errors.Is(timeout, ErrConnection) {
+		t.Error("a timeout should match both ErrTimeout and ErrConnection")
+	}
+}

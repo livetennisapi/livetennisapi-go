@@ -1,0 +1,12 @@
+{
+  "id": 77120,
+  "question": "Will Carlos Alcaraz beat Jannik Sinner?",
+  "status": "active",
+  "volume": 148230.5,
+  "liquidity": null,
+  "end_date": "2026-07-22T20:00:00Z",
+  "prices": [
+    { "side": 1, "bid": 0.41, "ask": 0.43, "mid": 0.42, "spread": 0.02, "timestamp": "2026-07-22T15:31:00Z" },
+    { "side": 2, "bid": 0, "ask": null, "mid": null, "spread": null, "timestamp": "2026-07-22T15:30:00Z" }
+  ]
+}

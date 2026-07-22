@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": 55010,
+      "event_date": "2026-07-24",
+      "tour": "wta",
+      "tournament": "Prague Open",
+      "round": "R16",
+      "surface": "clay",
+      "player1_name": "Marketa Vondrousova",
+      "player2_name": "Karolina Muchova",
+      "status": "scheduled"
+    }
+  ],
+  "meta": { "limit": 50, "offset": 0, "count": 1 }
+}

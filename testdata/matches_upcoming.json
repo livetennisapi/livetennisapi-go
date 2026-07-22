@@ -1,0 +1,47 @@
+{
+  "data": [
+    {
+      "id": 918300,
+      "tournament": "Cincinnati Masters",
+      "surface": "hard",
+      "indoor": false,
+      "format": "BO3",
+      "round": "SF",
+      "status": "upcoming",
+      "event_status": null,
+      "is_doubles": false,
+      "scheduled_time": "2026-07-23T18:00:00Z",
+      "players": {
+        "p1": {
+          "id": 5510,
+          "name": "Qualifier",
+          "tour": "atp",
+          "country": null,
+          "ranking": null,
+          "ranking_points": null,
+          "ranking_movement": null,
+          "hand": null,
+          "backhand": null,
+          "birthday": null,
+          "is_doubles_team": false
+        },
+        "p2": {
+          "id": 4088,
+          "name": "Jannik Sinner",
+          "tour": "atp",
+          "country": "ITA",
+          "ranking": 1,
+          "ranking_points": 11540,
+          "ranking_movement": "same",
+          "hand": "R",
+          "backhand": 2,
+          "birthday": "2001-08-16",
+          "is_doubles_team": false
+        }
+      },
+      "score": null,
+      "winner": null
+    }
+  ],
+  "meta": { "limit": 50, "offset": 0, "count": 1 }
+}
