@@ -16,7 +16,7 @@ import (
 
 const (
 	// Version is this client's version, reported in the User-Agent.
-	Version = "0.1.0"
+	Version = "1.0.0"
 
 	// DefaultBaseURL is the production API root.
 	DefaultBaseURL = "https://api.livetennisapi.com/api/public/v1"
