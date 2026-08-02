@@ -110,7 +110,7 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | Method | Endpoint | Tier |
 |---|---|---|
 | `Health` | `/health` | none |
-| `ListMatches` | `/matches` | FREE |
+| `ListMatches` | `/matches` | FREE¹ |
 | `GetMatch` | `/matches/{id}` | FREE |
 | `GetMatchScore` | `/matches/{id}/score` | FREE |
 | `SearchPlayers` | `/players` | FREE |
@@ -121,6 +121,11 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | `ListMarkets` | `/markets` | PRO |
 | `GetMarketPrices` | `/markets/{id}/prices` | PRO |
 | `GetMatchAnalysis` | `/matches/{id}/analysis` | ULTRA |
+
+¹ `ListMatches` is FREE for `StatusLive` and `StatusUpcoming`. Since 2026-07-25,
+`StatusCompleted` returns `ErrUpgradeRequired` on a FREE key — completed-match
+listings need the BASIC tier or any History plan. `GetMatch` on a completed
+match stays FREE.
 
 `GetMatch` additionally embeds `Market` from PRO and `Analysis` from ULTRA, and
 `GetMatchScore` populates `WinProbabilityP1` and `Danger` on ULTRA.

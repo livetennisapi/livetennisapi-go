@@ -12,7 +12,7 @@ the key travels in a request header, and only response bodies are stored here.
 | `health.json` | `/health` (no auth) | 200 |
 | `matches_live.json` | `/matches?status=live&limit=3` | 200 |
 | `matches_upcoming.json` | `/matches?status=upcoming&limit=3` | 200 |
-| `matches_completed.json` | `/matches?status=completed&limit=2` | 200 |
+| `matches_completed.json` | `/matches?status=completed&limit=2` | 200 — see note below |
 | `matches_tour_wta.json` | `/matches?tour=wta&limit=2` | 200 |
 | `match_detail.json` | `/matches/21635` | 200 |
 | `score.json` | `/matches/21635/score` | 200 |
@@ -24,6 +24,15 @@ the key travels in a request header, and only response bodies are stored here.
 | `error_bad_tour.json` | `/matches?tour=bogus` | 400 |
 | `error_403_upgrade_required.json` | `/matches/21635/analysis` (ULTRA) | 403 |
 | `error_403_history.json` | `/history/matches?limit=2` (BASIC) | 403 |
+
+**Note on `matches_completed.json`:** the 200 above was real when recorded, but
+the recording predates the 2026-07-25 gating change. Since that date,
+`/matches?status=completed` returns `403 {"error":"upgrade_required"}` on a
+FREE-tier key — completed-match listings need the BASIC tier or any History
+plan. The fixture still exercises decoding of a completed-match page (the body
+shape is unchanged for entitled keys); it no longer represents what a FREE key
+receives from production. Single-match fetches of completed matches
+(`/matches/{id}`) remain FREE.
 
 ## `testdata/synthetic/*.json` — hand-written, NOT recordings
 
