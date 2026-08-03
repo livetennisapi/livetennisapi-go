@@ -271,3 +271,7 @@ that a FREE key cannot reach. See [testdata/README.md](testdata/README.md).
 ## Licence
 
 MIT — see [LICENSE](LICENSE).
+
+## Affiliate program
+
+Know developers who need tennis data? The [affiliate program](https://affiliates.livetennisapi.com/program) pays 51% recurring commission for the life of every referred subscription — 30-day cookie, and the people you refer get 10% off.
