@@ -195,7 +195,7 @@ if errors.As(err, &apiErr) {
 
 The API reports `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
 and `Retry-After` on every response. The FREE tier is **30 requests/minute**,
-1,000/day.
+100/day.
 
 `RateLimit.Reset` is an absolute instant, not a delay, and every field is a
 pointer or zero-testable value so that "no header" stays distinct from "zero
