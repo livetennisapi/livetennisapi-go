@@ -5,6 +5,38 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-08-07
+
+**Full API parity**: every path in the public OpenAPI spec now has a typed
+method. Undocumented gateway aliases and non-API surfaces (HTML views, static
+assets) are deliberately out of scope.
+
+### Added
+
+- **Tournaments**: `ListTournaments` (search + tour filters) and
+  `GetTournament` — the catalogue `Match.TournamentID` joins, with curated
+  city/country (ISO-3166 alpha-2 — a different vocabulary from
+  `Player.Country`) and `Category` (never derived from the name).
+- **Usage**: `GetUsage` (`/usage`, any tier, quota-exempt) — effective vs
+  base tier with grant expiry, limits, today's calls and the 30-day history.
+  The daily reset instant is not in this response; it arrives on the daily
+  429 as `APIError.ResetsAt`.
+- **Bare prices**: `ListMatchPrices` (`/matches/{id}/prices`, PRO) — ticks
+  without the market wrapper, its own 500 cap (`MaxPriceTicks`) and `Minutes`
+  lookback in place of pagination. `Price` gains `PriceSource` and
+  `Synthetic`, so an estimated quote is never mistaken for a live book.
+- **Package manifest & download**: `GetHistoryPackage`
+  (`/history/packages/{period}`) and `DownloadHistoryPackage` (streaming
+  `io.ReadCloser` for the jsonl/csv file; verify against the manifest's
+  SHA-256).
+- **Webhooks** (ULTRA, direct keys only): `CreateWebhook` (secret returned
+  exactly once), `ListWebhooks` (never the secret), `DeleteWebhook`. Up to 3
+  per key — the 4th registration is `ErrWebhookLimit` (409). A marketplace
+  key is refused with 403 `direct_key_required`.
+- HTTP core generalised for mutations: POST/DELETE are attempted exactly
+  once, never retried — a timed-out POST may still have been applied, and
+  re-sending it could register a duplicate webhook.
+
 ## [1.1.0] — 2026-08-07
 
 ### Added

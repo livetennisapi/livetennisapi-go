@@ -119,6 +119,9 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | `SearchPlayers` | `/players` | FREE |
 | `GetPlayer` | `/players/{id}` | FREE |
 | `ListFixtures` | `/fixtures` | FREE |
+| `ListTournaments` | `/tournaments` | FREE |
+| `GetTournament` | `/tournaments/{id}` | FREE |
+| `GetUsage` | `/usage` | any (quota-exempt) |
 | `ListCompletedMatches` / `ListHistoryMatches` | `/history/matches` | BASIC² |
 | `GetMatchTape` | `/history/matches/{id}` | BASIC² |
 | `GetHeadToHead` | `/h2h` | BASIC² |
@@ -129,7 +132,9 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | `ListMatchEvents` | `/matches/{id}/events` | PRO |
 | `ListMarkets` | `/markets` | PRO |
 | `GetMarketPrices` | `/markets/{id}/prices` | PRO |
+| `ListMatchPrices` | `/matches/{id}/prices` | PRO |
 | `ListHistoryPackages` | `/history/packages` | PRO³ |
+| `GetHistoryPackage` / `DownloadHistoryPackage` | `/history/packages/{period}` | PRO³ |
 | `ListRankings` | `/rankings` | PRO / ULTRA⁴ |
 | `GetMatchAnalysis` | `/matches/{id}/analysis` | ULTRA |
 | `GetMatchStatistics` | `/matches/{id}/statistics` | ULTRA |
@@ -139,6 +144,9 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | `GetChartingPlayer` | `/charting/players` | ULTRA |
 | `GetChartingMatch` | `/charting/matches/{id}` | ULTRA |
 | `GetWSToken` | `/ws-token` | ULTRA |
+| `CreateWebhook` | `POST /webhooks` | ULTRA⁵ |
+| `ListWebhooks` | `/webhooks` | ULTRA⁵ |
+| `DeleteWebhook` | `DELETE /webhooks/{id}` | ULTRA⁵ |
 
 ¹ `ListMatches` is FREE for `StatusLive` and `StatusUpcoming`. Since 2026-07-25,
 `StatusCompleted` returns `ErrUpgradeRequired` on a FREE key — completed-match
@@ -156,8 +164,18 @@ system, no player ids) is **PRO**; **per-player** point-in-time records
 (`Player` ids, up to 50) are **ULTRA**. The client infers the right tier on a
 403 from which mode you called.
 
+⁵ **Direct keys only** — a marketplace key is refused with a 403 carrying
+code `direct_key_required`. Up to 3 webhooks per key: the 4th registration is
+`ErrWebhookLimit` (409). The signing secret is returned exactly once, on
+registration. Webhook mutations are never retried automatically — a timed-out
+POST may still have been applied.
+
 `GetMatch` additionally embeds `Market` from PRO and `Analysis` from ULTRA, and
 `GetMatchScore` populates `WinProbabilityP1` and `Danger` on ULTRA.
+
+This is the API's **complete public surface** — every path in the OpenAPI
+spec has a method above. Undocumented gateway aliases and non-API surfaces
+(HTML views, static assets/fonts) are deliberately not covered.
 
 ## History, archive and head-to-head
 
@@ -260,6 +278,7 @@ case err != nil:
 | `ErrUnauthorized` | 401 — key missing, unknown or disabled |
 | `ErrUpgradeRequired` | 403 — your tier does not unlock this endpoint |
 | `ErrNotFound` | 404 — no such resource, or no data yet |
+| `ErrWebhookLimit` | 409 — the key already holds 3 webhooks |
 | `ErrRateLimited` | 429 — the window was exceeded |
 | `ErrServerError` | any 5xx |
 | `ErrServiceUnavailable` | 503 — also matches `ErrServerError` |
