@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -222,7 +223,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, out any
 		}
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			err := c.apiError(resp, path, endpoint, rl)
+			err := c.apiError(resp, path, query, endpoint, rl)
 			resp.Body.Close()
 			return err
 		}
@@ -267,15 +268,21 @@ func decode(body io.Reader, out any) error {
 }
 
 // apiError builds the error for a non-2xx response.
-func (c *Client) apiError(resp *http.Response, path, endpoint string, rl RateLimit) error {
+func (c *Client) apiError(resp *http.Response, path string, query url.Values, endpoint string, rl RateLimit) error {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 
 	// Only a string code is usable. An {"error": null} body, or a body that is
 	// not JSON at all, must fall through to the status text rather than
 	// surface as "null" — the same rule the Python and JS clients apply.
 	var payload struct {
-		Error   string   `json:"error"`
-		Allowed []string `json:"allowed"`
+		Error      string   `json:"error"`
+		Detail     string   `json:"detail"`
+		Allowed    []string `json:"allowed"`
+		Candidates []string `json:"candidates"`
+		Scope      string   `json:"scope"`
+		LimitDay   *int     `json:"limit_per_day"`
+		ResetsAt   string   `json:"resets_at"`
+		RetryEpoch *int64   `json:"retry_at_epoch"`
 	}
 	_ = json.Unmarshal(body, &payload)
 
@@ -292,14 +299,33 @@ func (c *Client) apiError(resp *http.Response, path, endpoint string, rl RateLim
 		StatusCode:    resp.StatusCode,
 		Code:          payload.Error,
 		Message:       message,
+		Detail:        payload.Detail,
 		RateLimit:     rl,
 		URL:           endpoint,
 		Header:        resp.Header,
 		Body:          body,
 		AllowedValues: payload.Allowed,
+		Candidates:    payload.Candidates,
 	}
 	if resp.StatusCode == http.StatusForbidden {
-		apiErr.RequiredTier = requiredTierFor(path)
+		apiErr.RequiredTier = requiredTierFor(path, query)
+	}
+	if resp.StatusCode == http.StatusTooManyRequests {
+		// The three 429 shapes: the per-minute window (bare rate_limited),
+		// the daily quota (scope "day" with an absolute resets_at instant,
+		// derived from the account's local midnight), and the abuse throttle
+		// (retry_at_epoch, a ~24h block on chronically over-cap clients).
+		apiErr.Scope = payload.Scope
+		apiErr.LimitPerDay = payload.LimitDay
+		if payload.ResetsAt != "" {
+			var at Time
+			if err := at.UnmarshalJSON([]byte(strconv.Quote(payload.ResetsAt))); err == nil && !at.IsZero() {
+				apiErr.ResetsAt = at.Time
+			}
+		}
+		if payload.RetryEpoch != nil && *payload.RetryEpoch > 0 {
+			apiErr.RetryAt = time.Unix(*payload.RetryEpoch, 0).UTC()
+		}
 	}
 	return apiErr
 }

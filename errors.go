@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 )
 
 // Tier is a subscription level. A call above your tier is refused with 403.
@@ -74,20 +76,36 @@ const pricingURL = "https://livetennisapi.com/#pricing"
 // tierRequirements maps a path fragment to the lowest tier that unlocks it.
 // The API answers a tier wall with a bare {"error":"upgrade_required"} and
 // does not say which tier is needed, so the client infers it from the endpoint
-// it called. First match wins. Kept identical to the Python and JS clients.
+// it called. First match wins, so the more specific markers sit above the
+// broad "/history" one. Kept aligned with the Python and JS clients.
 var tierRequirements = []struct {
 	marker string
 	tier   Tier
 }{
 	{"/analysis", TierUltra},
+	{"/statistics", TierUltra},
+	{"/rally", TierUltra},
+	{"/charting", TierUltra},
+	{"/ws-token", TierUltra},
 	{"/events", TierPro},
 	{"/markets", TierPro},
+	{"/history/packages", TierPro},
+	{"/h2h", TierBasic},
 	{"/history", TierBasic},
 }
 
 // requiredTierFor infers the tier an endpoint needs, or "" when the endpoint
 // is on the FREE floor and a 403 therefore has no obvious upgrade to name.
-func requiredTierFor(path string) Tier {
+// The query matters only for /rankings, whose two modes are gated apart:
+// the rank-ordered listing is PRO, per-player as-of records (?player=) are
+// ULTRA.
+func requiredTierFor(path string, query url.Values) Tier {
+	if strings.Contains(path, "/rankings") {
+		if len(query["player"]) > 0 {
+			return TierUltra
+		}
+		return TierPro
+	}
 	for _, req := range tierRequirements {
 		if strings.Contains(path, req.marker) {
 			return req.tier
@@ -118,8 +136,34 @@ type APIError struct {
 	// otherwise the HTTP status text.
 	Message string
 
+	// Detail is the API's human-readable explanation, from the body's
+	// "detail" field, when one adds anything. Empty otherwise.
+	Detail string
+
 	// RateLimit is the budget the API reported on this response.
 	RateLimit RateLimit
+
+	// ResetsAt is when the daily quota resets, from the "resets_at" field of
+	// a daily 429 (Code "rate_limited" with Scope "day"). It is an absolute
+	// instant derived from the account's local midnight — do not assume any
+	// fixed UTC hour. Zero on every other error.
+	ResetsAt time.Time
+
+	// Scope is the rate-limit window that was exhausted on a 429: "day" for
+	// the daily quota, empty for the per-minute window (which carries no
+	// scope) and for every non-429 error.
+	Scope string
+
+	// LimitPerDay is the daily quota that was exhausted, from the
+	// "limit_per_day" field of a daily 429. nil elsewhere.
+	LimitPerDay *int
+
+	// RetryAt is when an abuse throttle lifts, from the "retry_at_epoch"
+	// field of a 429 with Code "abuse_throttled" — the block the API places
+	// on chronically over-cap clients for around 24 hours. If you see it,
+	// fix the retry loop that earned it rather than waiting it out. Zero on
+	// every other error.
+	RetryAt time.Time
 
 	// RequiredTier is the lowest tier that unlocks the endpoint, inferred from
 	// the path on a 403. Empty on every other status, and on a 403 from an
@@ -143,6 +187,12 @@ type APIError struct {
 	// {"error":"bad_tour","allowed":["atp","challenger","itf","juniors","wta"]}
 	// and this is that list. nil when the response named no alternatives.
 	AllowedValues []string
+
+	// Candidates lists the players an ambiguous name fragment matched, from
+	// the "candidates" field of a 400 with Code "ambiguous_name" on the
+	// head-to-head and archive-career endpoints — the API refuses to sum two
+	// people into one record. nil elsewhere.
+	Candidates []string
 }
 
 // Error implements error.
@@ -157,6 +207,15 @@ func (e *APIError) Error() string {
 	}
 	if len(e.AllowedValues) > 0 {
 		fmt.Fprintf(&b, ": allowed values are %s", strings.Join(e.AllowedValues, ", "))
+	}
+	if len(e.Candidates) > 0 {
+		fmt.Fprintf(&b, ": candidates are %s", strings.Join(e.Candidates, ", "))
+	}
+	if !e.RetryAt.IsZero() {
+		fmt.Fprintf(&b, ": abuse-throttled until %s — fix the retry loop that earned this", e.RetryAt.UTC().Format(time.RFC3339))
+	}
+	if !e.ResetsAt.IsZero() {
+		fmt.Fprintf(&b, ": daily quota resets at %s", e.ResetsAt.UTC().Format(time.RFC3339))
 	}
 	if d := e.RateLimit.RetryAfter; d != nil && e.StatusCode == http.StatusTooManyRequests {
 		fmt.Fprintf(&b, ": retry after %s", *d)
