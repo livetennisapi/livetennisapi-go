@@ -778,3 +778,54 @@ func TestConnectionErrorUnwraps(t *testing.T) {
 		t.Error("a timeout should match both ErrTimeout and ErrConnection")
 	}
 }
+
+// The webhook limit is a 409 with its own sentinel, so "delete one first" is
+// a branch rather than a status-code comparison.
+func TestWebhookLimitIs409(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":"webhook_limit","detail":"a key holds at most 3 webhooks"}`))
+	}))
+
+	_, err := client.CreateWebhook(t.Context(), WebhookParams{URL: "https://example.test/h"})
+	if !errors.Is(err, ErrWebhookLimit) {
+		t.Fatalf("error = %v, want ErrWebhookLimit", err)
+	}
+	if errors.Is(err, ErrRateLimited) || errors.Is(err, ErrUpgradeRequired) {
+		t.Error("a 409 is neither a rate limit nor a tier wall")
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %v, want an *APIError", err)
+	}
+	if apiErr.Code != "webhook_limit" {
+		t.Errorf("Code = %q, want webhook_limit", apiErr.Code)
+	}
+}
+
+// On a marketplace key the webhook endpoints answer 403 direct_key_required —
+// a channel restriction, not a tier one, though the tier inference still
+// names ULTRA as the endpoint's floor.
+func TestWebhooksDirectKeyRequired(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"direct_key_required"}`))
+	}))
+
+	_, err := client.ListWebhooks(t.Context())
+	if !errors.Is(err, ErrUpgradeRequired) {
+		t.Fatalf("error = %v, want ErrUpgradeRequired", err)
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %v, want an *APIError", err)
+	}
+	if apiErr.Code != "direct_key_required" {
+		t.Errorf("Code = %q, want direct_key_required — the code tells the channel story", apiErr.Code)
+	}
+	if apiErr.RequiredTier != TierUltra {
+		t.Errorf("RequiredTier = %q, want ULTRA", apiErr.RequiredTier)
+	}
+}

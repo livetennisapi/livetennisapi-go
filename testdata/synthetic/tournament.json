@@ -1,0 +1,10 @@
+{
+  "id": "atp-roland-garros-m",
+  "name": "Roland Garros",
+  "tour": "atp",
+  "surface": "clay",
+  "indoor": false,
+  "city": "Paris",
+  "country": "FR",
+  "category": "grand_slam"
+}

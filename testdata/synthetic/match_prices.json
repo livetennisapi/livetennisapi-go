@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "side": 1,
+      "bid": 0.61,
+      "ask": 0.64,
+      "mid": 0.625,
+      "spread": 0.03,
+      "price_source": "prediction_market",
+      "synthetic": false,
+      "timestamp": "2026-08-07T11:41:00Z"
+    },
+    {
+      "side": 1,
+      "bid": null,
+      "ask": null,
+      "mid": 0.6,
+      "spread": null,
+      "price_source": "prediction_market",
+      "synthetic": true,
+      "timestamp": "2026-08-07T11:40:30Z"
+    }
+  ],
+  "meta": {"match_id": 21635, "count": 2, "has_more": true, "limit": 2, "minutes": 30}
+}

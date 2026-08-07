@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": "atp-roland-garros-m",
+      "name": "Roland Garros",
+      "tour": "atp",
+      "surface": "clay",
+      "indoor": false,
+      "city": "Paris",
+      "country": "FR",
+      "category": "grand_slam"
+    },
+    {
+      "id": "itf-m15-kursumlijska-banja-m",
+      "name": "M15 Kursumlijska Banja",
+      "tour": "itf",
+      "surface": "clay",
+      "indoor": false,
+      "city": null,
+      "country": null,
+      "category": "itf"
+    }
+  ],
+  "meta": {"limit": 2, "offset": 0, "count": 2, "total": 1204, "has_more": true}
+}

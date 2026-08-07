@@ -2,7 +2,9 @@ package livetennisapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -435,6 +437,73 @@ func TestEndpointRequestShape(t *testing.T) {
 			call:     func(ctx context.Context, c *Client) error { _, err := c.GetWSToken(ctx); return err },
 			wantPath: "/ws-token",
 		},
+		{
+			name:    "tournaments with search and tour",
+			fixture: "synthetic/tournaments.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListTournaments(ctx, TournamentsParams{
+					Search:     "roland",
+					Tour:       TourATP,
+					ListParams: ListParams{Limit: 2},
+				})
+				return err
+			},
+			wantPath:  "/tournaments",
+			wantQuery: url.Values{"search": {"roland"}, "tour": {"atp"}, "limit": {"2"}},
+		},
+		{
+			name:    "get tournament by string id",
+			fixture: "synthetic/tournament.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetTournament(ctx, "atp-roland-garros-m")
+				return err
+			},
+			wantPath: "/tournaments/atp-roland-garros-m",
+		},
+		{
+			name:     "usage",
+			fixture:  "synthetic/usage.json",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetUsage(ctx); return err },
+			wantPath: "/usage",
+		},
+		{
+			// This endpoint's cap is 500, not MaxLimit — the clamp must use
+			// the right ceiling.
+			name:    "match prices clamp to MaxPriceTicks",
+			fixture: "synthetic/match_prices.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatchPrices(ctx, matchID, MatchPricesParams{Limit: 9999, Minutes: 30})
+				return err
+			},
+			wantPath:  "/matches/21635/prices",
+			wantQuery: url.Values{"limit": {"500"}, "minutes": {"30"}},
+		},
+		{
+			// Zero params defer to the API's own defaults.
+			name:    "match prices with defaults",
+			fixture: "synthetic/match_prices.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatchPrices(ctx, matchID, MatchPricesParams{})
+				return err
+			},
+			wantPath: "/matches/21635/prices",
+		},
+		{
+			name:    "history package manifest",
+			fixture: "synthetic/package_manifest.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetHistoryPackage(ctx, "2026-07", PackageTape)
+				return err
+			},
+			wantPath:  "/history/packages/2026-07",
+			wantQuery: url.Values{"kind": {"tape"}},
+		},
+		{
+			name:     "list webhooks",
+			fixture:  "synthetic/webhooks.json",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.ListWebhooks(ctx); return err },
+			wantPath: "/webhooks",
+		},
 	}
 
 	for _, tc := range tests {
@@ -813,5 +882,157 @@ func TestNilOptionsAndDefaults(t *testing.T) {
 	// Bearer is the default, matching the Python and JS clients.
 	if client.auth != AuthBearer {
 		t.Errorf("auth = %v, want AuthBearer", client.auth)
+	}
+}
+
+// Webhook registration must POST a JSON body; deletion must DELETE. The
+// request-shape table above covers only GETs, so the mutations are asserted
+// here, body included.
+func TestWebhookMutations(t *testing.T) {
+	t.Run("create sends POST with url and events", func(t *testing.T) {
+		var got http.Request
+		var gotBody []byte
+		body := fixture(t, "synthetic/webhook_created.json")
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = *r
+			gotBody, _ = io.ReadAll(r.Body)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write(body)
+		}))
+
+		webhook, err := client.CreateWebhook(t.Context(), WebhookParams{
+			URL:    "https://example.test/hooks/tennis",
+			Events: []WebhookEvent{WebhookScore, WebhookBreakPoint},
+		})
+		if err != nil {
+			t.Fatalf("CreateWebhook: %v", err)
+		}
+
+		if got.Method != http.MethodPost || got.URL.Path != "/webhooks" {
+			t.Errorf("request = %s %s, want POST /webhooks", got.Method, got.URL.Path)
+		}
+		if ct := got.Header.Get("Content-Type"); ct != "application/json" {
+			t.Errorf("Content-Type = %q, want application/json", ct)
+		}
+		var sent struct {
+			URL    string   `json:"url"`
+			Events []string `json:"events"`
+		}
+		if err := json.Unmarshal(gotBody, &sent); err != nil {
+			t.Fatalf("request body is not JSON: %v", err)
+		}
+		if sent.URL != "https://example.test/hooks/tennis" || len(sent.Events) != 2 {
+			t.Errorf("body = %+v", sent)
+		}
+
+		// The secret arrives exactly here and nowhere else.
+		if webhook.Secret != "whsec_invented_only_shown_once" {
+			t.Errorf("Secret = %q, want the one-time secret", webhook.Secret)
+		}
+		if webhook.ID != 42 || !webhook.Enabled {
+			t.Errorf("webhook = %+v", webhook)
+		}
+	})
+
+	t.Run("create omits empty events for the API default", func(t *testing.T) {
+		var gotBody []byte
+		body := fixture(t, "synthetic/webhook_created.json")
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotBody, _ = io.ReadAll(r.Body)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write(body)
+		}))
+
+		if _, err := client.CreateWebhook(t.Context(), WebhookParams{URL: "https://example.test/h"}); err != nil {
+			t.Fatalf("CreateWebhook: %v", err)
+		}
+		if strings.Contains(string(gotBody), "events") {
+			t.Errorf("body %q should omit events so the API default applies", gotBody)
+		}
+	})
+
+	t.Run("delete sends DELETE", func(t *testing.T) {
+		var got http.Request
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = *r
+			_, _ = w.Write([]byte(`{"deleted":1}`))
+		}))
+
+		if err := client.DeleteWebhook(t.Context(), 42); err != nil {
+			t.Fatalf("DeleteWebhook: %v", err)
+		}
+		if got.Method != http.MethodDelete || got.URL.Path != "/webhooks/42" {
+			t.Errorf("request = %s %s, want DELETE /webhooks/42", got.Method, got.URL.Path)
+		}
+	})
+}
+
+// A mutation is attempted exactly once: a POST that timed out may still have
+// been applied, and re-sending it could register a duplicate webhook.
+func TestMutationsAreNotRetried(t *testing.T) {
+	var attempts atomic.Int32
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":"internal"}`))
+	}), WithMaxRetries(2))
+
+	_, err := client.CreateWebhook(t.Context(), WebhookParams{URL: "https://example.test/h"})
+	if !errors.Is(err, ErrServerError) {
+		t.Fatalf("error = %v, want ErrServerError", err)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Errorf("POST attempts = %d, want exactly 1", got)
+	}
+
+	attempts.Store(0)
+	if err := client.DeleteWebhook(t.Context(), 1); !errors.Is(err, ErrServerError) {
+		t.Fatalf("delete error = %v, want ErrServerError", err)
+	}
+	if got := attempts.Load(); got != 1 {
+		t.Errorf("DELETE attempts = %d, want exactly 1", got)
+	}
+}
+
+// The package download streams the body back verbatim and maps error
+// statuses like every other call.
+func TestDownloadHistoryPackage(t *testing.T) {
+	const payload = `{"match":{"id":1}}` + "\n" + `{"match":{"id":2}}` + "\n"
+
+	var got http.Request
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = *r
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = w.Write([]byte(payload))
+	}))
+
+	body, err := client.DownloadHistoryPackage(t.Context(), "2026-07", PackageTape, "jsonl")
+	if err != nil {
+		t.Fatalf("DownloadHistoryPackage: %v", err)
+	}
+	defer body.Close()
+
+	if got.URL.Path != "/history/packages/2026-07" {
+		t.Errorf("path = %q", got.URL.Path)
+	}
+	if q := got.URL.Query(); q.Get("format") != "jsonl" || q.Get("kind") != "tape" {
+		t.Errorf("query = %v", q)
+	}
+
+	data, err := io.ReadAll(body)
+	if err != nil {
+		t.Fatalf("reading stream: %v", err)
+	}
+	if string(data) != payload {
+		t.Errorf("stream = %q, want the file verbatim", data)
+	}
+
+	// A tier wall on the download maps like everywhere else.
+	walled := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"upgrade_required"}`))
+	}))
+	if _, err := walled.DownloadHistoryPackage(t.Context(), "2026-07", "", "csv"); !errors.Is(err, ErrUpgradeRequired) {
+		t.Fatalf("error = %v, want ErrUpgradeRequired", err)
 	}
 }

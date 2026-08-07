@@ -1350,3 +1350,147 @@ func TestWSTokenDecoding(t *testing.T) {
 		t.Errorf("slate channel = %q, want slate:all", token.Channels.Slate)
 	}
 }
+
+func TestTournamentsDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/tournaments.json")))
+
+	page, err := client.ListTournaments(t.Context(), TournamentsParams{})
+	if err != nil {
+		t.Fatalf("ListTournaments: %v", err)
+	}
+	if page.Len() != 2 {
+		t.Fatalf("page length = %d, want 2", page.Len())
+	}
+
+	rg := page.Data[0]
+	if rg.ID != "atp-roland-garros-m" {
+		t.Errorf("ID = %q — tournament ids are strings, not integers", rg.ID)
+	}
+	if rg.Tour != TourATP {
+		t.Errorf("Tour = %q, want the typed atp", rg.Tour)
+	}
+	if rg.Category != "grand_slam" || rg.City != "Paris" || rg.Country != "FR" {
+		t.Errorf("curated fields = %q/%q/%q", rg.Category, rg.City, rg.Country)
+	}
+
+	// Uncurated fields stay empty, never guessed from the name.
+	itf := page.Data[1]
+	if itf.City != "" || itf.Country != "" {
+		t.Errorf("uncurated city/country = %q/%q, want empty", itf.City, itf.Country)
+	}
+
+	client = newTestClient(t, serveBody(fixture(t, "synthetic/tournament.json")))
+	one, err := client.GetTournament(t.Context(), "atp-roland-garros-m")
+	if err != nil {
+		t.Fatalf("GetTournament: %v", err)
+	}
+	if one.Name != "Roland Garros" {
+		t.Errorf("Name = %q", one.Name)
+	}
+}
+
+func TestUsageDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/usage.json")))
+
+	usage, err := client.GetUsage(t.Context())
+	if err != nil {
+		t.Fatalf("GetUsage: %v", err)
+	}
+
+	// A temporary grant: effective tier above the subscription, with an
+	// expiry. The vocabulary is lowercase, the API's own.
+	if usage.Tier != "pro" || usage.BaseTier != "basic" {
+		t.Errorf("tier/base = %q/%q", usage.Tier, usage.BaseTier)
+	}
+	if usage.TierExpiresAt.IsZero() {
+		t.Error("a grant carries its expiry")
+	}
+	if usage.Limits.PerDay == nil || *usage.Limits.PerDay != 10000 {
+		t.Errorf("per_day = %v, want 10000", usage.Limits.PerDay)
+	}
+	if usage.Today.RemainingDay == nil || *usage.Today.RemainingDay != 9588 {
+		t.Errorf("remaining_day = %v, want 9588", usage.Today.RemainingDay)
+	}
+	if len(usage.History) != 2 || usage.History[1].Errors != 12 {
+		t.Errorf("history = %+v", usage.History)
+	}
+}
+
+func TestMatchPricesDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/match_prices.json")))
+
+	prices, err := client.ListMatchPrices(t.Context(), 21635, MatchPricesParams{Limit: 2, Minutes: 30})
+	if err != nil {
+		t.Fatalf("ListMatchPrices: %v", err)
+	}
+
+	if len(prices.Data) != 2 {
+		t.Fatalf("ticks = %d, want 2", len(prices.Data))
+	}
+	// A real top-of-book tick versus a synthesised one — the tag keeps them
+	// apart.
+	real0 := prices.Data[0]
+	if real0.Synthetic == nil || *real0.Synthetic {
+		t.Errorf("first tick Synthetic = %v, want false (a real book)", real0.Synthetic)
+	}
+	if real0.PriceSource != "prediction_market" {
+		t.Errorf("PriceSource = %q", real0.PriceSource)
+	}
+	synth := prices.Data[1]
+	if synth.Synthetic == nil || !*synth.Synthetic {
+		t.Errorf("second tick Synthetic = %v, want true", synth.Synthetic)
+	}
+	if synth.Bid != nil || synth.Ask != nil {
+		t.Error("a synthesised tick has no real bid/ask")
+	}
+
+	meta := prices.Meta
+	if meta.MatchID != 21635 || !meta.HasMore || meta.Limit != 2 {
+		t.Errorf("meta = %+v", meta)
+	}
+	if meta.Minutes == nil || *meta.Minutes != 30 {
+		t.Errorf("Minutes = %v, want 30", meta.Minutes)
+	}
+}
+
+// The listing never carries the secret — only registration does, and that is
+// asserted in TestWebhookMutations.
+func TestWebhooksListDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/webhooks.json")))
+
+	page, err := client.ListWebhooks(t.Context())
+	if err != nil {
+		t.Fatalf("ListWebhooks: %v", err)
+	}
+	if page.Len() != 2 {
+		t.Fatalf("webhooks = %d, want 2", page.Len())
+	}
+
+	healthy := page.Data[0]
+	if healthy.Secret != "" {
+		t.Error("the listing must never carry a secret")
+	}
+	if len(healthy.Events) != 2 || healthy.Events[1] != WebhookBreakPoint {
+		t.Errorf("events = %v", healthy.Events)
+	}
+
+	failing := page.Data[1]
+	if failing.Enabled || failing.ConsecutiveFailures != 17 || failing.LastError == "" {
+		t.Errorf("failing webhook = %+v", failing)
+	}
+}
+
+func TestHistoryPackageManifestDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/package_manifest.json")))
+
+	manifest, err := client.GetHistoryPackage(t.Context(), "2026-07", "")
+	if err != nil {
+		t.Fatalf("GetHistoryPackage: %v", err)
+	}
+	if manifest.Period != "2026-07" || manifest.Status != "ready" {
+		t.Errorf("manifest = %+v", manifest)
+	}
+	if len(manifest.Files) != 2 || manifest.Files[0].Bytes != 181203344 || manifest.Files[0].SHA256 == "" {
+		t.Errorf("files = %+v", manifest.Files)
+	}
+}
