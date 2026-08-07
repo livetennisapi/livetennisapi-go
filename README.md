@@ -6,9 +6,12 @@
 
 **Official Go client for the [Live Tennis API](https://livetennisapi.com).**
 
-Real-time tennis scores, players, rankings, match-winner market prices and model
-win-probability — for ATP, WTA, Challenger, ITF and juniors.
+Real-time tennis scores, players, point-by-point tapes, a 1968–2022 results
+archive, head-to-head records, point-in-time rankings, shot-level charting,
+match-winner market prices and model win-probability — for ATP, WTA,
+Challenger, ITF and juniors.
 
+[![ci](https://github.com/livetennisapi/livetennisapi-go/actions/workflows/ci.yml/badge.svg)](https://github.com/livetennisapi/livetennisapi-go/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/livetennisapi/livetennisapi-go.svg)](https://pkg.go.dev/github.com/livetennisapi/livetennisapi-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/livetennisapi/livetennisapi-go)](https://goreportcard.com/report/github.com/livetennisapi/livetennisapi-go)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -116,19 +119,104 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | `SearchPlayers` | `/players` | FREE |
 | `GetPlayer` | `/players/{id}` | FREE |
 | `ListFixtures` | `/fixtures` | FREE |
-| `ListCompletedMatches` | `/history/matches` | BASIC |
+| `ListCompletedMatches` / `ListHistoryMatches` | `/history/matches` | BASIC² |
+| `GetMatchTape` | `/history/matches/{id}` | BASIC² |
+| `GetHeadToHead` | `/h2h` | BASIC² |
+| `ListArchiveMatches` | `/history/archive/matches` | BASIC² |
+| `GetArchiveMatch` | `/history/archive/matches/{id}` | BASIC² |
+| `ListArchivePlayers` | `/history/archive/players` | BASIC² |
+| `GetArchiveCareer` | `/history/archive/career` | BASIC² |
 | `ListMatchEvents` | `/matches/{id}/events` | PRO |
 | `ListMarkets` | `/markets` | PRO |
 | `GetMarketPrices` | `/markets/{id}/prices` | PRO |
+| `ListHistoryPackages` | `/history/packages` | PRO³ |
+| `ListRankings` | `/rankings` | PRO / ULTRA⁴ |
 | `GetMatchAnalysis` | `/matches/{id}/analysis` | ULTRA |
+| `GetMatchStatistics` | `/matches/{id}/statistics` | ULTRA |
+| `ListRallyMatches` | `/rally/matches` | ULTRA |
+| `GetRallyMatch` | `/rally/matches/{id}` | ULTRA |
+| `GetMatchRally` | `/history/matches/{id}/rally` | ULTRA |
+| `GetChartingPlayer` | `/charting/players` | ULTRA |
+| `GetChartingMatch` | `/charting/matches/{id}` | ULTRA |
+| `GetWSToken` | `/ws-token` | ULTRA |
 
 ¹ `ListMatches` is FREE for `StatusLive` and `StatusUpcoming`. Since 2026-07-25,
 `StatusCompleted` returns `ErrUpgradeRequired` on a FREE key — completed-match
 listings need the BASIC tier or any History plan. `GetMatch` on a completed
 match stays FREE.
 
+² BASIC, **or any History plan** — a History grant unlocks these even on a
+FREE core key.
+
+³ The tape kind's floor. `PackageRally` and `PackageRankings` kinds, and the
+`Year` archive listing, need ULTRA (or the matching History product).
+
+⁴ `/rankings` has two modes gated apart: the rank-ordered **listing** (one
+system, no player ids) is **PRO**; **per-player** point-in-time records
+(`Player` ids, up to 50) are **ULTRA**. The client infers the right tier on a
+403 from which mode you called.
+
 `GetMatch` additionally embeds `Market` from PRO and `Analysis` from ULTRA, and
 `GetMatchScore` populates `WinProbabilityP1` and `Danger` on ULTRA.
+
+## History, archive and head-to-head
+
+The point-by-point **tape** works on live matches too — it is the sequence of
+states where `GetMatchScore` is one state. Ask for the clean sequence to get
+one row per point, each with `PointWinner`, plus per-set tiebreak scores:
+
+```go
+tape, err := client.GetMatchTape(ctx, matchID, livetennisapi.TapeParams{
+	Sequence: livetennisapi.SequenceClean,
+})
+if err != nil {
+	return err
+}
+// Not every tape covers the whole match — check before backtesting.
+if tape.Meta.Coverage == livetennisapi.CoverageReconstructedPartial {
+	// known-incomplete: rows are real, the match is not fully covered
+}
+for _, row := range tape.Tape {
+	if row.Timestamp.IsZero() {
+		continue // reconstructed row: no wall clock, no model fields
+	}
+	fmt.Println(row.Score.String(), row.PointWinner)
+}
+```
+
+The **archive** holds 1,485,752 results from 1968 through 2022 — its own id
+space, keyed by name, ending exactly where the API's own coverage begins.
+**Head-to-head** joins both halves:
+
+```go
+h2h, err := client.GetHeadToHead(ctx, "nadal", "djokovic")
+if err != nil {
+	return err
+}
+fmt.Printf("%d–%d over %d meetings (%d undecided)\n",
+	h2h.Totals.P1Wins, h2h.Totals.P2Wins, h2h.Totals.Meetings, h2h.Totals.Undecided)
+```
+
+An ambiguous name fragment is refused with the candidates on
+`APIError.Candidates` rather than silently summing two people into one record.
+
+## Rankings
+
+`ListRankings` is the point-in-time answer — every other ranking field in the
+API is the player's *current* value joined at read time. The listing mode
+(PRO) returns the full published table for one system; the per-player mode
+(ULTRA) returns as-of records for up to 50 ids:
+
+```go
+page, err := client.ListRankings(ctx, livetennisapi.RankingsParams{
+	System: []livetennisapi.RankingSystem{livetennisapi.RankingATP},
+	AsOf:   "2026-08-03",
+})
+```
+
+Rows carry `PreviousRank` (ATP/WTA), and UTR rows carry a `Rating` with nil
+`Rank` and `Points` — it is a rating, not a ranking, and the systems are
+never collapsed into one number.
 
 ## Options
 
@@ -179,8 +267,11 @@ case err != nil:
 | `ErrTimeout` | a deadline — also matches `ErrConnection` |
 | `ErrAPI` | any error from this package |
 
-The concrete `*APIError` carries `StatusCode`, `Code`, `Message`, `RequiredTier`,
-the raw `Body`, and the `RateLimit` budget observed on that response:
+The concrete `*APIError` carries `StatusCode`, `Code`, `Message`, `Detail`,
+`RequiredTier`, the raw `Body`, the `RateLimit` budget observed on that
+response, and — where the response provided them — `AllowedValues`,
+`Candidates` (ambiguous names), `Scope`/`LimitPerDay`/`ResetsAt` (daily 429)
+and `RetryAt` (abuse throttle):
 
 ```go
 var apiErr *livetennisapi.APIError
@@ -191,16 +282,37 @@ if errors.As(err, &apiErr) {
 }
 ```
 
-## Rate limits
+## Rate limits & quotas
+
+| Tier | Requests/min | Requests/day | Price |
+|---|---|---|---|
+| FREE | 30 | 100 | $0 |
+| BASIC | 60 | 1,000 | $9.99/mo |
+| PRO | 300 | 10,000 | $29.99/mo |
+| ULTRA | 600 | 500,000 | $99.99/mo |
+
+At 100/day, poll no faster than every **15 minutes** on a FREE key. An
+always-on dashboard should run on BASIC or above.
 
 The API reports `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-and `Retry-After` on every response. The FREE tier is **30 requests/minute**,
-100/day.
+and `Retry-After` on every response. `RateLimit.Reset` is an absolute instant,
+not a delay, and every field is a pointer or zero-testable value so that "no
+header" stays distinct from "zero budget left". Note that `Retry-After` appears
+on successful responses too, where it merely describes the window — only
+`ErrRateLimited` means you were throttled.
 
-`RateLimit.Reset` is an absolute instant, not a delay, and every field is a
-pointer or zero-testable value so that "no header" stays distinct from "zero
-budget left". Note that `Retry-After` appears on successful responses too, where
-it merely describes the window — only `ErrRateLimited` means you were throttled.
+A 429 comes in three shapes, and the error carries each one's recovery
+information:
+
+- **Per-minute window** — wait `RateLimit.RetryAfter` and continue.
+- **Daily quota** — `APIError.Scope` is `"day"` and `APIError.ResetsAt` is the
+  absolute instant the quota resets (derived from the account's local
+  midnight — do not assume any fixed UTC hour). `APIError.LimitPerDay` names
+  the cap.
+- **Abuse throttle** — `APIError.Code` is `"abuse_throttled"` and
+  `APIError.RetryAt` says when the ~24h block lifts. It is placed on
+  chronically over-cap clients: fix the retry loop that earned it rather than
+  waiting it out.
 
 429 and 5xx are retried automatically (twice by default, honouring `Retry-After`).
 Nothing else is: a bad key, an unentitled tier or a missing id cannot start
@@ -248,7 +360,17 @@ These trip people up against this API in every language, so they are worth stati
   `IsDoublesTeam` set, both names in `Name`, and no individual ranking.
 - **Unknown fields are ignored, never rejected.** The API ships additive changes
   within v1, so treat every field as optional.
-- **`meta.count` describes the page, not the collection.** End-of-data is a short page.
+- **`meta.count` describes the page, not the collection.** Use `meta.has_more`
+  (or a short page where the endpoint predates it) for end-of-data — `Paginate`
+  does both. `meta.total` is `nil` when the set cannot be counted cheaply,
+  which is not zero results.
+- **`Match.Tour` is typed; `Player.Tour` and `Fixture.Tour` are not.** The
+  match field shares the filter's own vocabulary and is safe to compare against
+  the `Tour` constants; the other two use the wider response vocabulary
+  (`"juniors_boys"`, `"juniors_girls"`).
+- **A zero `TapeRow.Timestamp` marks a reconstructed row** — no wall clock and
+  no model output ever existed for it, and nothing is synthesised. Check
+  `TapeMeta.Coverage` before backtesting a tape.
 
 ## Development
 
@@ -267,6 +389,13 @@ that a FREE key cannot reach. See [testdata/README.md](testdata/README.md).
 - [livetennisapi-python](https://github.com/livetennisapi/livetennisapi-python) — official Python client
 - [livetennisapi-js](https://github.com/livetennisapi/livetennisapi-js) — official JavaScript / TypeScript client
 - [openapi](https://github.com/livetennisapi/openapi) — the OpenAPI 3.1 specification
+
+## Links
+
+- **Docs**: https://docs.livetennisapi.com
+- **Free API key**: https://livetennisapi.com/subscribe/free
+- **Discord**: https://discord.gg/f8WUZHgDm6
+- **GitHub org**: https://github.com/livetennisapi
 
 ## Licence
 
