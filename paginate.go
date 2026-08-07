@@ -28,9 +28,13 @@ import (
 // check it.
 //
 // pageSize is clamped to 1..[MaxLimit]; pass 0 for the largest page allowed,
-// which minimises requests against your rate limit. Iteration ends on the
-// first short page, which is the only reliable end-of-data signal the API
-// gives: [ListMeta.Count] describes the page, not the collection.
+// which minimises requests against your rate limit. Iteration ends when the
+// API says has_more is false, and otherwise on the first short page —
+// [ListMeta.Count] describes the page, not the collection, so it is never
+// the signal. The has_more flag matters on the coverage-filtered history
+// listing, where the filter is applied after the page is cut and a filtered
+// page is routinely shorter than requested while later pages still hold
+// matches.
 func Paginate[T any](
 	ctx context.Context,
 	fetch func(context.Context, ListParams) (*Page[T], error),
@@ -69,9 +73,24 @@ func Paginate[T any](
 				}
 			}
 
-			// A page shorter than requested is the last one. An empty page
-			// also ends iteration, which additionally guards against an
-			// endpoint that ignores offset and would otherwise loop forever.
+			// When the API says whether more results exist, believe it: a
+			// coverage-filtered page is cut to the limit BEFORE the filter
+			// runs, so it can come back short — or empty — while later pages
+			// still hold matches. The offset space is the pre-filter one,
+			// which is why the offset advances by the limit, not by the rows
+			// received.
+			if page.Meta.HasMore != nil {
+				if !*page.Meta.HasMore {
+					return
+				}
+				offset += limit
+				continue
+			}
+
+			// Otherwise a page shorter than requested is the last one. An
+			// empty page also ends iteration, which additionally guards
+			// against an endpoint that ignores offset and would otherwise
+			// loop forever.
 			if len(page.Data) < limit {
 				return
 			}

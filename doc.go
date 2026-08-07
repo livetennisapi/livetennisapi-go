@@ -1,6 +1,9 @@
 // Package livetennisapi is the official Go client for the Live Tennis API:
-// real-time tennis scores, player data, match-winner market prices, and
-// model-driven match analysis. The API is read-only.
+// real-time tennis scores, player data, point-by-point tapes, deep historical
+// results back to 1968, head-to-head records, point-in-time rankings,
+// shot-level charting, match-winner market prices, and model-driven match
+// analysis — across ATP, WTA, Challenger, ITF and juniors. The API is
+// read-only.
 //
 // # Getting started
 //
@@ -27,10 +30,14 @@
 // # Tiers
 //
 // Access is tiered FREE, BASIC, PRO, ULTRA. FREE covers live and upcoming
-// matches, scores, players and fixtures; historical results need BASIC; match
-// events and market prices need PRO; model analysis and the live model fields
-// ([Score.WinProbabilityP1], [Score.Danger]) need ULTRA. Calling above your
-// tier returns 403, which this package surfaces as [ErrUpgradeRequired]:
+// matches, scores, players and fixtures. Historical results — completed
+// matches, per-match tapes, the 1968–2022 archive and head-to-head records —
+// need BASIC. Match events, market prices, bulk history packages and the
+// rankings listing need PRO. Model analysis, the live model fields
+// ([Score.WinProbabilityP1], [Score.Danger]), in-play statistics, rally and
+// charting data, per-player rankings and the push-feed token need ULTRA.
+// Calling above your tier returns 403, which this package surfaces as
+// [ErrUpgradeRequired]:
 //
 //	analysis, err := client.GetMatchAnalysis(ctx, matchID)
 //	if errors.Is(err, livetennisapi.ErrUpgradeRequired) {
@@ -84,11 +91,13 @@
 // the accepted values are then on [APIError.AllowedValues] rather than buried
 // in the raw body.
 //
-// Mind that the filter's vocabulary is narrower than the one responses use:
-// filtering by [TourJuniors] returns records whose own tour field reads
-// "juniors_boys" or "juniors_girls". [Player.Tour] and [Fixture.Tour] are
-// therefore plain strings, and comparing one against a [Tour] constant will
-// silently fail to match.
+// Mind that the filter's vocabulary is narrower than the one player and
+// fixture records use: filtering by [TourJuniors] returns records whose own
+// tour field reads "juniors_boys" or "juniors_girls". [Player.Tour] and
+// [Fixture.Tour] are therefore plain strings, and comparing one against a
+// [Tour] constant will silently fail to match. [Match.Tour] is the exception:
+// it shares the filter's own vocabulary, so it is typed [Tour] and safe to
+// compare and group on.
 //
 // # Forward compatibility
 //
