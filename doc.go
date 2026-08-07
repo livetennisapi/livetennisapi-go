@@ -30,14 +30,14 @@
 // # Tiers
 //
 // Access is tiered FREE, BASIC, PRO, ULTRA. FREE covers live and upcoming
-// matches, scores, players and fixtures. Historical results — completed
-// matches, per-match tapes, the 1968–2022 archive and head-to-head records —
-// need BASIC. Match events, market prices, bulk history packages and the
-// rankings listing need PRO. Model analysis, the live model fields
-// ([Score.WinProbabilityP1], [Score.Danger]), in-play statistics, rally and
-// charting data, per-player rankings and the push-feed token need ULTRA.
-// Calling above your tier returns 403, which this package surfaces as
-// [ErrUpgradeRequired]:
+// matches, scores, players, fixtures, the tournament catalogue and your own
+// usage. Historical results — completed matches, per-match tapes, the
+// 1968–2022 archive and head-to-head records — need BASIC. Match events,
+// market prices, bulk history packages and the rankings listing need PRO.
+// Model analysis, the live model fields ([Score.WinProbabilityP1],
+// [Score.Danger]), in-play statistics, rally and charting data, per-player
+// rankings, the push-feed token and webhooks need ULTRA. Calling above your
+// tier returns 403, which this package surfaces as [ErrUpgradeRequired]:
 //
 //	analysis, err := client.GetMatchAnalysis(ctx, matchID)
 //	if errors.Is(err, livetennisapi.ErrUpgradeRequired) {

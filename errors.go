@@ -51,6 +51,11 @@ var (
 	// and market endpoints return it for a match the model has not covered.
 	ErrNotFound = errors.New("livetennisapi: not found")
 
+	// ErrWebhookLimit is a 409: the key already holds its maximum of 3
+	// webhooks, so registration was refused. Delete one with
+	// [Client.DeleteWebhook] first.
+	ErrWebhookLimit = errors.New("livetennisapi: webhook limit reached")
+
 	// ErrRateLimited is a 429: the tier's rate-limit window was exceeded.
 	// [APIError.RateLimit] carries how long to wait.
 	ErrRateLimited = errors.New("livetennisapi: rate limited")
@@ -87,6 +92,7 @@ var tierRequirements = []struct {
 	{"/rally", TierUltra},
 	{"/charting", TierUltra},
 	{"/ws-token", TierUltra},
+	{"/webhooks", TierUltra},
 	{"/events", TierPro},
 	{"/markets", TierPro},
 	{"/history/packages", TierPro},
@@ -237,6 +243,8 @@ func (e *APIError) Is(target error) bool {
 		return e.StatusCode == http.StatusForbidden
 	case ErrNotFound:
 		return e.StatusCode == http.StatusNotFound
+	case ErrWebhookLimit:
+		return e.StatusCode == http.StatusConflict
 	case ErrRateLimited:
 		return e.StatusCode == http.StatusTooManyRequests
 	case ErrServiceUnavailable:

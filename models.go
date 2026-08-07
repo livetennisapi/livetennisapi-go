@@ -421,6 +421,16 @@ type Price struct {
 	// Spread is the gap between bid and ask. nil when absent.
 	Spread *float64 `json:"spread,omitempty"`
 
+	// PriceSource is the feed category, for example "prediction_market".
+	// Empty when unstated.
+	PriceSource string `json:"price_source,omitempty"`
+
+	// Synthetic reports whether the bid/ask were estimated from mid rather
+	// than read from a live order book: true = estimated, false = real
+	// top-of-book, nil = unknown (older ticks) — tagged so a synthesised
+	// quote is never mistaken for a live book.
+	Synthetic *bool `json:"synthetic,omitempty"`
+
 	// Timestamp is when the tick was observed. Zero if absent.
 	Timestamp Time `json:"timestamp,omitzero"`
 }
@@ -1652,6 +1662,185 @@ type HistoryPackagesPage struct {
 		Count int    `json:"count,omitempty"`
 		Year  string `json:"year,omitempty"`
 	} `json:"meta,omitzero"`
+}
+
+// Tournament is one row of the tournament catalogue — the id space
+// [Match.TournamentID] joins. Identity is one row per tournament and event
+// type, stable across seasons.
+type Tournament struct {
+	// ID is the stable tournament id that match objects carry.
+	ID string `json:"id,omitempty"`
+
+	// Name is the tournament name. Empty when unknown.
+	Name string `json:"name,omitempty"`
+
+	// Tour is the circuit, in the filter's own vocabulary (see [Match.Tour]).
+	// Empty when the event has no public tour name.
+	Tour Tour `json:"tour,omitempty"`
+
+	// Surface is "hard", "clay" or "grass". Empty when unknown.
+	Surface string `json:"surface,omitempty"`
+
+	// Indoor reports whether the event is played indoors.
+	Indoor bool `json:"indoor,omitempty"`
+
+	// City is the host city, from a curated table. Empty where not curated.
+	City string `json:"city,omitempty"`
+
+	// Country is the host country as ISO-3166 alpha-2 — mind that this is a
+	// DIFFERENT vocabulary from [Player.Country]'s IOC-style 3-letter codes.
+	// Empty where not curated.
+	Country string `json:"country,omitempty"`
+
+	// Category is the tournament category where the catalogues agree
+	// unambiguously on an exact-name join: "grand_slam", "masters_1000",
+	// "tour_finals", "atp_500", "atp_250", "wta_1000", "wta_500", "wta_250",
+	// "wta_125", "challenger", "itf" or "juniors". Empty otherwise — never
+	// derived from the name, because that would be guesswork.
+	Category string `json:"category,omitempty"`
+}
+
+// UsageDay is one day of a key's usage history.
+type UsageDay struct {
+	// Day is the calendar date.
+	Day Time `json:"day,omitzero"`
+
+	// Calls is how many requests were made that day.
+	Calls int `json:"calls,omitempty"`
+
+	// Errors is how many of them failed.
+	Errors int `json:"errors,omitempty"`
+}
+
+// Usage is the calling key's own usage against its quota, from
+// [Client.GetUsage].
+//
+// The per-minute window is NOT here — it rides on the X-RateLimit-* headers
+// of every response (see [RateLimit]); this is the durable daily picture.
+// Usage does not carry the daily reset instant either: that arrives as
+// [APIError.ResetsAt] on the daily 429 itself.
+type Usage struct {
+	// Principal is an opaque reference to your own key.
+	Principal string `json:"principal,omitempty"`
+
+	// Tier is the effective tier, lowercase: "free", "basic", "pro" or
+	// "ultra". Mind the case — this is the API's own vocabulary here, not
+	// the uppercase [Tier] constants this package uses for 403 inference.
+	Tier string `json:"tier,omitempty"`
+
+	// BaseTier is the subscription tier; it equals Tier unless a temporary
+	// grant is active.
+	BaseTier string `json:"base_tier,omitempty"`
+
+	// TierExpiresAt is when a temporary tier grant reverts. Zero when no
+	// grant is active.
+	TierExpiresAt Time `json:"tier_expires_at,omitzero"`
+
+	// Channel is how the key was issued.
+	Channel string `json:"channel,omitempty"`
+
+	// Limits is the quota grid for this key. Either limit is nil when the
+	// channel does not enforce it.
+	Limits struct {
+		PerMinute *int `json:"per_minute,omitempty"`
+		PerDay    *int `json:"per_day,omitempty"`
+	} `json:"limits,omitzero"`
+
+	// Today is today's usage, current to the second. RemainingDay is nil
+	// when no daily limit applies.
+	Today struct {
+		Calls        int  `json:"calls,omitempty"`
+		Errors       int  `json:"errors,omitempty"`
+		RemainingDay *int `json:"remaining_day,omitempty"`
+	} `json:"today,omitzero"`
+
+	// History is the last 30 days, oldest first.
+	History []UsageDay `json:"history,omitempty"`
+
+	// AsOf is when this summary was assembled.
+	AsOf Time `json:"as_of,omitzero"`
+}
+
+// MatchPricesMeta is the envelope beside a bare price-tick response.
+type MatchPricesMeta struct {
+	// MatchID echoes the match asked for.
+	MatchID int64 `json:"match_id,omitempty"`
+
+	// Count is how many ticks this response holds.
+	Count int `json:"count,omitempty"`
+
+	// HasMore reports that the window was clipped at the limit — older ticks
+	// exist. There is no offset on this endpoint; raise the limit or narrow
+	// the minutes window instead.
+	HasMore bool `json:"has_more,omitempty"`
+
+	// Limit echoes the applied limit.
+	Limit int `json:"limit,omitempty"`
+
+	// Minutes echoes the lookback window. nil when none was asked for.
+	Minutes *int `json:"minutes,omitempty"`
+}
+
+// MatchPrices is the bare price ticks of a match's mapped match-winner
+// market, newest first, from [Client.ListMatchPrices] — no market wrapper.
+type MatchPrices struct {
+	// Data holds the ticks, newest first.
+	Data []Price `json:"data"`
+
+	// Meta is the window envelope.
+	Meta MatchPricesMeta `json:"meta,omitzero"`
+}
+
+// WebhookEvent is a frame kind a webhook can subscribe to.
+type WebhookEvent string
+
+// The webhook event kinds.
+const (
+	// WebhookScore delivers a frame on every live score commit. This is the
+	// default when a webhook is registered without events.
+	WebhookScore WebhookEvent = "score"
+
+	// WebhookBreakPoint delivers break-point frames.
+	WebhookBreakPoint WebhookEvent = "break_point"
+)
+
+// Webhook is one registered outbound webhook. ULTRA, direct keys only.
+//
+// The API POSTs the same frames the push WebSocket sends to the registered
+// HTTPS endpoint on every matching commit.
+type Webhook struct {
+	// ID is the webhook's id, usable with [Client.DeleteWebhook].
+	ID int64 `json:"id,omitempty"`
+
+	// URL is the delivery endpoint. HTTPS only, publicly routable.
+	URL string `json:"url,omitempty"`
+
+	// Events is what the webhook subscribed to.
+	Events []WebhookEvent `json:"events,omitempty"`
+
+	// Enabled reports whether deliveries are active.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// CreatedAt is when the webhook was registered. Zero if absent.
+	CreatedAt Time `json:"created_at,omitzero"`
+
+	// LastDeliveryAt is when the last delivery succeeded. Zero when none has.
+	LastDeliveryAt Time `json:"last_delivery_at,omitzero"`
+
+	// ConsecutiveFailures counts deliveries that have failed in a row.
+	ConsecutiveFailures int `json:"consecutive_failures,omitempty"`
+
+	// LastError is the most recent delivery error. Empty when none.
+	LastError string `json:"last_error,omitempty"`
+
+	// Secret is the signing secret — present ONLY on the registration
+	// response from [Client.CreateWebhook], shown exactly once. Store it
+	// immediately; it is never returned again, not even by
+	// [Client.ListWebhooks].
+	Secret string `json:"secret,omitempty"`
+
+	// SecretNote is the API's reminder about the secret's one-time nature.
+	SecretNote string `json:"secret_note,omitempty"`
 }
 
 // WSChannels is the channel vocabulary of the push WebSocket.

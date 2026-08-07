@@ -2,6 +2,9 @@ package livetennisapi
 
 import (
 	"context"
+	"errors"
+	"io"
+	"net/http"
 	"net/url"
 	"strconv"
 )
@@ -741,8 +744,10 @@ func (c *Client) GetWSToken(ctx context.Context) (*WSToken, error) {
 
 // ListFixtures returns upcoming scheduled fixtures, earliest first. FREE.
 //
-// Fixtures are name-only — the players are not yet resolved to player records,
-// so use [Client.ListMatches] with [StatusUpcoming] when you need ids.
+// Fixtures are primarily name-keyed: [Fixture.Player1ID] and
+// [Fixture.Player2ID] are set only where a participant resolved to a roster
+// record, so use [Client.ListMatches] with [StatusUpcoming] when you need
+// full player objects.
 func (c *Client) ListFixtures(ctx context.Context, params ListFixturesParams) (*Page[Fixture], error) {
 	q := url.Values{}
 	if params.Tour != "" {
@@ -755,4 +760,208 @@ func (c *Client) ListFixtures(ctx context.Context, params ListFixturesParams) (*
 		return nil, err
 	}
 	return &out, nil
+}
+
+// TournamentsParams filters [Client.ListTournaments].
+type TournamentsParams struct {
+	// Search is a case-insensitive substring match on the tournament name.
+	Search string
+
+	// Tour restricts results to one circuit. Empty means every tour.
+	Tour Tour
+
+	// ListParams paginates the result.
+	ListParams
+}
+
+// ListTournaments returns the tournament catalogue in name order — the id
+// space [Match.TournamentID] joins. FREE.
+//
+// Tier/category is populated only where the catalogues agree unambiguously
+// (see [Tournament.Category]); it is never derived from the name.
+func (c *Client) ListTournaments(ctx context.Context, params TournamentsParams) (*Page[Tournament], error) {
+	q := url.Values{}
+	if params.Search != "" {
+		q.Set("search", params.Search)
+	}
+	if params.Tour != "" {
+		q.Set("tour", string(params.Tour))
+	}
+	params.apply(q)
+
+	var out Page[Tournament]
+	if err := c.get(ctx, "/tournaments", q, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetTournament returns one tournament by the stable id carried on match
+// objects as [Match.TournamentID]. FREE.
+func (c *Client) GetTournament(ctx context.Context, tournamentID string) (*Tournament, error) {
+	var out Tournament
+	if err := c.get(ctx, "/tournaments/"+url.PathEscape(tournamentID), nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetUsage returns the calling key's own usage against its quota: tier,
+// limits, today's calls current to the second, and a 30-day history. Any
+// tier, and QUOTA-EXEMPT — polling it does not spend the budget it reports.
+//
+// The per-minute window is not in the response; it rides on the
+// X-RateLimit-* headers of every call (observe them with
+// [WithRateLimitObserver]).
+func (c *Client) GetUsage(ctx context.Context) (*Usage, error) {
+	var out Usage
+	if err := c.get(ctx, "/usage", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// MatchPricesParams bounds [Client.ListMatchPrices].
+type MatchPricesParams struct {
+	// Limit is how many ticks to return, 1 to [MaxPriceTicks]. Zero means
+	// the API's default of 100. Values above the cap are clamped.
+	Limit int
+
+	// Minutes bounds the lookback window, 1 to 1440. Zero means no window.
+	Minutes int
+}
+
+// ListMatchPrices returns the bare recent price ticks of a match's mapped
+// match-winner market, newest first — no market wrapper, which makes it the
+// lightest polling read for prices. PRO — below that it returns
+// [ErrUpgradeRequired], and [ErrNotFound] when the match has no mapped
+// market.
+//
+// There is no offset: when [MatchPricesMeta.HasMore] reports the window was
+// clipped, raise the limit or narrow the minutes window. Prices are
+// prediction-market quotes in [0,1], not an official line, and can lag live
+// scores; [Price.Synthetic] tags a quote estimated from mid rather than a
+// live order book.
+func (c *Client) ListMatchPrices(ctx context.Context, matchID int64, params MatchPricesParams) (*MatchPrices, error) {
+	q := url.Values{}
+	if params.Limit > 0 {
+		q.Set("limit", strconv.Itoa(min(params.Limit, MaxPriceTicks)))
+	}
+	if params.Minutes > 0 {
+		q.Set("minutes", strconv.Itoa(params.Minutes))
+	}
+
+	var out MatchPrices
+	if err := c.get(ctx, "/matches/"+strconv.FormatInt(matchID, 10)+"/prices", q, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetHistoryPackage returns one monthly package's manifest — its files with
+// sizes and SHA-256 checksums. Same gating as [Client.ListHistoryPackages].
+// The file itself streams through [Client.DownloadHistoryPackage].
+func (c *Client) GetHistoryPackage(ctx context.Context, period string, kind PackageKind) (*HistoryPackage, error) {
+	q := url.Values{}
+	if kind != "" {
+		q.Set("kind", string(kind))
+	}
+
+	var out HistoryPackage
+	if err := c.get(ctx, "/history/packages/"+url.PathEscape(period), q, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DownloadHistoryPackage streams one monthly package file. format is "jsonl"
+// (one whole tape object per line, coverage meta included) or "csv" (one row
+// per point, no coverage columns); an unknown format is rejected with
+// [ErrBadRequest]. Same gating as [Client.ListHistoryPackages].
+//
+// The caller owns the returned body and must Close it. Package files run to
+// hundreds of megabytes, which is why this streams rather than buffering —
+// verify what you stored against the manifest's SHA-256 from
+// [Client.GetHistoryPackage].
+func (c *Client) DownloadHistoryPackage(ctx context.Context, period string, kind PackageKind, format string) (io.ReadCloser, error) {
+	if ctx == nil {
+		return nil, errors.New("livetennisapi: nil context")
+	}
+
+	path := "/history/packages/" + url.PathEscape(period)
+	q := url.Values{"format": {format}}
+	if kind != "" {
+		q.Set("kind", string(kind))
+	}
+	endpoint := c.baseURL + path + "?" + q.Encode()
+
+	// One attempt, no retries: a download that dies midway is for the caller
+	// to restart, not for this client to silently re-request.
+	resp, err := c.do(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, connectionError(endpoint, err, ctx.Err())
+	}
+
+	rl := parseRateLimit(resp.Header)
+	if c.observe != nil {
+		c.observe(rl)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		apiErr := c.apiError(resp, path, q, endpoint, rl)
+		resp.Body.Close()
+		return nil, apiErr
+	}
+	return resp.Body, nil
+}
+
+// WebhookParams configures [Client.CreateWebhook].
+type WebhookParams struct {
+	// URL is the delivery endpoint. HTTPS only, publicly routable.
+	URL string `json:"url"`
+
+	// Events selects the frame kinds to deliver. Empty means the API's
+	// default, [WebhookScore] only.
+	Events []WebhookEvent `json:"events,omitempty"`
+}
+
+// CreateWebhook registers an outbound webhook: the API POSTs the same frames
+// the push WebSocket sends to the given HTTPS endpoint on every matching
+// commit. ULTRA, and DIRECT KEYS ONLY — a marketplace key is refused with a
+// 403 carrying code "direct_key_required", which is a channel restriction,
+// not a tier one.
+//
+// The response is the ONLY time [Webhook.Secret] is shown — store it
+// immediately. A key holds at most 3 webhooks; the 4th registration is
+// refused with [ErrWebhookLimit], so delete one first.
+//
+// Registration is never retried automatically: a request that timed out may
+// still have been applied, and re-sending it could register a duplicate.
+func (c *Client) CreateWebhook(ctx context.Context, params WebhookParams) (*Webhook, error) {
+	var out Webhook
+	if err := c.call(ctx, http.MethodPost, "/webhooks", nil, params, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// ListWebhooks returns your registered webhooks with their delivery health —
+// never the secret, which is shown only at registration. ULTRA, direct keys
+// only.
+func (c *Client) ListWebhooks(ctx context.Context) (*Page[Webhook], error) {
+	var out Page[Webhook]
+	if err := c.get(ctx, "/webhooks", nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteWebhook removes one of your webhooks. ULTRA, direct keys only. It
+// returns [ErrNotFound] for an id that is not yours or is already gone.
+//
+// Deletion is never retried automatically, so a timeout is reported rather
+// than papered over — re-check with [Client.ListWebhooks] before assuming
+// either outcome.
+func (c *Client) DeleteWebhook(ctx context.Context, webhookID int64) error {
+	return c.call(ctx, http.MethodDelete, "/webhooks/"+strconv.FormatInt(webhookID, 10), nil, nil, nil)
 }

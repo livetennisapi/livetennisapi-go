@@ -1,6 +1,7 @@
 package livetennisapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,10 @@ const (
 
 	// MaxLimit is the largest page size the API accepts.
 	MaxLimit = 200
+
+	// MaxPriceTicks is the largest tick count [Client.ListMatchPrices]
+	// accepts — that endpoint has its own, higher cap in place of pagination.
+	MaxPriceTicks = 500
 
 	// maxErrorBody caps how much of an error response is buffered, so a
 	// misrouted request that returns a large HTML page cannot balloon memory.
@@ -183,8 +188,28 @@ func shouldRetry(status int) bool {
 // get performs an authenticated GET and decodes the JSON body into out, which
 // may be nil to discard it.
 func (c *Client) get(ctx context.Context, path string, query url.Values, out any) error {
+	return c.call(ctx, http.MethodGet, path, query, nil, out)
+}
+
+// call performs an authenticated request and decodes the JSON body into out,
+// which may be nil to discard it. payload, when non-nil, is marshalled once
+// and sent as the JSON request body.
+//
+// Only GET requests are retried. A POST that timed out may nonetheless have
+// been applied — re-sending it could register a duplicate webhook — and a
+// re-sent DELETE would answer 404 for work that actually succeeded, so a
+// mutation gets exactly one attempt and surfaces its failure honestly.
+func (c *Client) call(ctx context.Context, method, path string, query url.Values, payload, out any) error {
 	if ctx == nil {
 		return errors.New("livetennisapi: nil context")
+	}
+
+	var body []byte
+	if payload != nil {
+		var err error
+		if body, err = json.Marshal(payload); err != nil {
+			return fmt.Errorf("livetennisapi: encoding request: %w", err)
+		}
 	}
 
 	endpoint := c.baseURL + "/" + strings.TrimLeft(path, "/")
@@ -192,12 +217,17 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, out any
 		endpoint += "?" + encoded
 	}
 
+	maxRetries := c.maxRetries
+	if method != http.MethodGet {
+		maxRetries = 0
+	}
+
 	for attempt := 0; ; attempt++ {
-		resp, err := c.do(ctx, endpoint)
+		resp, err := c.do(ctx, method, endpoint, body)
 		if err != nil {
 			// A cancelled or expired caller context is final: the caller has
 			// stopped waiting, so retrying serves nobody.
-			if ctxErr := ctx.Err(); ctxErr != nil || attempt >= c.maxRetries {
+			if ctxErr := ctx.Err(); ctxErr != nil || attempt >= maxRetries {
 				return connectionError(endpoint, err, ctxErr)
 			}
 			if waitErr := sleep(ctx, c.backoff(attempt, 0)); waitErr != nil {
@@ -211,7 +241,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, out any
 			c.observe(rl)
 		}
 
-		if shouldRetry(resp.StatusCode) && attempt < c.maxRetries {
+		if shouldRetry(resp.StatusCode) && attempt < maxRetries {
 			// Drain before closing so the connection returns to the pool
 			// instead of being torn down.
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxErrorBody))
@@ -236,14 +266,21 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, out any
 
 // do issues a single attempt. A fresh request is built each time because a
 // request that has been sent must not be reused.
-func (c *Client) do(ctx context.Context, endpoint string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+func (c *Client) do(ctx context.Context, method, endpoint string, body []byte) (*http.Response, error) {
+	var reader io.Reader
+	if body != nil {
+		reader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, reader)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", c.userAgent)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if c.apiKey != "" {
 		if c.auth == AuthBearer {
 			req.Header.Set("Authorization", "Bearer "+c.apiKey)
