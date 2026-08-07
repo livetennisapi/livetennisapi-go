@@ -1,0 +1,79 @@
+{
+  "data": [
+    {
+      "id": 1447213,
+      "source_id": "2022-520-R-QF-104745-104925",
+      "tour": "atp",
+      "level": "G",
+      "tournament": "Roland Garros",
+      "surface": "clay",
+      "draw_size": 128,
+      "event_date": "2022-05-22",
+      "round": "QF",
+      "best_of": 5,
+      "minutes": 254,
+      "winner": {
+        "name": "Rafael Nadal",
+        "hand": "L",
+        "country": "esp",
+        "rank": 5,
+        "seed": 5,
+        "player_id": 104745,
+        "height_cm": 185,
+        "age": 35.9,
+        "entry": null
+      },
+      "loser": {
+        "name": "Novak Djokovic",
+        "hand": "R",
+        "country": "srb",
+        "rank": 1,
+        "seed": 1,
+        "player_id": 104925,
+        "height_cm": 188,
+        "age": 34.9,
+        "entry": null
+      },
+      "score": "6-2 4-6 6-2 7-6(4)",
+      "outcome": "completed"
+    },
+    {
+      "id": 100017,
+      "source_id": "1973-580-R-F-100437-100581",
+      "tour": "atp",
+      "level": "G",
+      "tournament": "Australian Open",
+      "surface": "grass",
+      "draw_size": 64,
+      "event_date": "1973-01-01",
+      "round": "F",
+      "best_of": 5,
+      "minutes": null,
+      "winner": {
+        "name": "Invented Champion",
+        "hand": "R",
+        "country": "aus",
+        "rank": null,
+        "seed": 2,
+        "player_id": 100437,
+        "height_cm": null,
+        "age": 26.4,
+        "entry": null
+      },
+      "loser": {
+        "name": "Invented Finalist",
+        "hand": null,
+        "country": "nzl",
+        "rank": null,
+        "seed": null,
+        "player_id": 100581,
+        "height_cm": null,
+        "age": null,
+        "entry": "Q"
+      },
+      "score": "6-3 RET",
+      "outcome": "retired"
+    }
+  ],
+  "meta": {"limit": 2, "offset": 0, "count": 2, "total": 1485752, "has_more": true}
+}

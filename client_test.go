@@ -212,6 +212,229 @@ func TestEndpointRequestShape(t *testing.T) {
 			wantPath:  "/fixtures",
 			wantQuery: url.Values{"tour": {"juniors"}, "limit": {"3"}},
 		},
+		{
+			// The player filter repeats; country, from and to ride alongside.
+			name:    "matches filtered by players, country and dates",
+			fixture: "matches_live.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListMatches(ctx, ListMatchesParams{
+					Player:  []int64{2317, 9001},
+					Country: "esp",
+					From:    "2026-08-01",
+					To:      "2026-08-07",
+				})
+				return err
+			},
+			wantPath: "/matches",
+			wantQuery: url.Values{
+				"player": {"2317", "9001"}, "country": {"esp"},
+				"from": {"2026-08-01"}, "to": {"2026-08-07"},
+			},
+		},
+		{
+			name:    "history matches with the full filter set",
+			fixture: "matches_completed.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListHistoryMatches(ctx, HistoryMatchesParams{
+					From:       "2026-07-01",
+					To:         "2026-07-31",
+					Coverage:   CoverageFromStart,
+					Tour:       TourATP,
+					Player:     []int64{2317},
+					Country:    "esp",
+					ListParams: ListParams{Limit: 5},
+				})
+				return err
+			},
+			wantPath: "/history/matches",
+			wantQuery: url.Values{
+				"from": {"2026-07-01"}, "to": {"2026-07-31"},
+				"coverage": {"from_start"}, "tour": {"atp"},
+				"player": {"2317"}, "country": {"esp"}, "limit": {"5"},
+			},
+		},
+		{
+			name:    "match tape with clean sequence",
+			fixture: "synthetic/tape.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetMatchTape(ctx, matchID, TapeParams{Sequence: SequenceClean})
+				return err
+			},
+			wantPath:  "/history/matches/21635",
+			wantQuery: url.Values{"sequence": {"clean"}},
+		},
+		{
+			// The raw default is the API's own, so no query is sent at all.
+			name:    "match tape with default sequence",
+			fixture: "synthetic/tape.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetMatchTape(ctx, matchID, TapeParams{})
+				return err
+			},
+			wantPath: "/history/matches/21635",
+		},
+		{
+			name:    "head to head",
+			fixture: "synthetic/h2h.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetHeadToHead(ctx, "nadal", "djokovic")
+				return err
+			},
+			wantPath: "/h2h",
+			wantQuery: url.Values{
+				"p1": {"nadal"}, "p2": {"djokovic"},
+			},
+		},
+		{
+			name:    "archive matches with filters",
+			fixture: "synthetic/archive_matches.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListArchiveMatches(ctx, ArchiveMatchesParams{
+					Tour:       TourATP,
+					Name:       "nadal",
+					From:       "2005-01-01",
+					To:         "2005-12-31",
+					Round:      "F",
+					Level:      "G",
+					ListParams: ListParams{Limit: 2},
+				})
+				return err
+			},
+			wantPath: "/history/archive/matches",
+			wantQuery: url.Values{
+				"tour": {"atp"}, "name": {"nadal"},
+				"from": {"2005-01-01"}, "to": {"2005-12-31"},
+				"round": {"F"}, "level": {"G"}, "limit": {"2"},
+			},
+		},
+		{
+			name:     "get archive match",
+			fixture:  "synthetic/archive_match.json",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetArchiveMatch(ctx, 1447213); return err },
+			wantPath: "/history/archive/matches/1447213",
+		},
+		{
+			name:    "archive players",
+			fixture: "synthetic/archive_players.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListArchivePlayers(ctx, ArchivePlayersParams{Name: "nadal", Tour: TourATP})
+				return err
+			},
+			wantPath:  "/history/archive/players",
+			wantQuery: url.Values{"name": {"nadal"}, "tour": {"atp"}},
+		},
+		{
+			name:      "archive career",
+			fixture:   "synthetic/archive_career.json",
+			call:      func(ctx context.Context, c *Client) error { _, err := c.GetArchiveCareer(ctx, "nadal"); return err },
+			wantPath:  "/history/archive/career",
+			wantQuery: url.Values{"name": {"nadal"}},
+		},
+		{
+			// Listing mode: no player ids, exactly one system.
+			name:    "rankings listing mode",
+			fixture: "synthetic/rankings_listing.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListRankings(ctx, RankingsParams{
+					System:     []RankingSystem{RankingATP},
+					AsOf:       "2026-08-06",
+					ListParams: ListParams{Limit: 2},
+				})
+				return err
+			},
+			wantPath:  "/rankings",
+			wantQuery: url.Values{"system": {"atp"}, "as_of": {"2026-08-06"}, "limit": {"2"}},
+		},
+		{
+			// Per-player mode: player and system both repeat.
+			name:    "rankings per-player mode",
+			fixture: "synthetic/rankings_players.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListRankings(ctx, RankingsParams{
+					Player: []int64{2317, 9001},
+					System: []RankingSystem{RankingATP, RankingUTR},
+				})
+				return err
+			},
+			wantPath:  "/rankings",
+			wantQuery: url.Values{"player": {"2317", "9001"}, "system": {"atp", "utr"}},
+		},
+		{
+			name:     "match statistics",
+			fixture:  "synthetic/statistics.json",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatchStatistics(ctx, matchID); return err },
+			wantPath: "/matches/21635/statistics",
+		},
+		{
+			name:    "rally matches with filters",
+			fixture: "synthetic/rally_matches.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListRallyMatches(ctx, RallyMatchesParams{
+					Player:  "invented",
+					From:    "2026-01-01",
+					To:      "2026-06-30",
+					Surface: "clay",
+					Gender:  "M",
+				})
+				return err
+			},
+			wantPath: "/rally/matches",
+			wantQuery: url.Values{
+				"player": {"invented"}, "from": {"2026-01-01"}, "to": {"2026-06-30"},
+				"surface": {"clay"}, "gender": {"M"},
+			},
+		},
+		{
+			name:    "get rally match",
+			fixture: "synthetic/rally_match.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetRallyMatch(ctx, 118203, ListParams{Limit: 2})
+				return err
+			},
+			wantPath:  "/rally/matches/118203",
+			wantQuery: url.Values{"limit": {"2"}},
+		},
+		{
+			name:    "rally by our match id",
+			fixture: "synthetic/rally_match.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetMatchRally(ctx, matchID, ListParams{})
+				return err
+			},
+			wantPath: "/history/matches/21635/rally",
+		},
+		{
+			name:    "charting player",
+			fixture: "synthetic/charting_player.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetChartingPlayer(ctx, ChartingPlayerParams{Name: "invented", Gender: "men"})
+				return err
+			},
+			wantPath:  "/charting/players",
+			wantQuery: url.Values{"name": {"invented"}, "gender": {"men"}},
+		},
+		{
+			name:     "charting match",
+			fixture:  "synthetic/charting_match.json",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetChartingMatch(ctx, 118203); return err },
+			wantPath: "/charting/matches/118203",
+		},
+		{
+			name:    "history packages by kind and year",
+			fixture: "synthetic/history_packages.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListHistoryPackages(ctx, HistoryPackagesParams{Kind: PackageRankings, Year: "2026"})
+				return err
+			},
+			wantPath:  "/history/packages",
+			wantQuery: url.Values{"kind": {"rankings"}, "year": {"2026"}},
+		},
+		{
+			name:     "ws token",
+			fixture:  "synthetic/ws_token.json",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetWSToken(ctx); return err },
+			wantPath: "/ws-token",
+		},
 	}
 
 	for _, tc := range tests {

@@ -1,0 +1,70 @@
+{
+  "rally_match_id": 118203,
+  "source_id": "20260607-M-Roland_Garros-F-Invented_One-Invented_Two",
+  "match_id": 31882,
+  "date": "2026-06-07",
+  "tournament": "Roland Garros",
+  "round": "F",
+  "surface": "clay",
+  "gender": "M",
+  "best_of": 5,
+  "players": [
+    {"name": "Invented One", "hand": "R"},
+    {"name": "Invented Two", "hand": "L"}
+  ],
+  "points": 289,
+  "points_parsed": 287,
+  "rally": [
+    {
+      "point": 1,
+      "set": [0, 0],
+      "games": [0, 0],
+      "score": "0-0",
+      "game": 1,
+      "is_tiebreak": false,
+      "server": 1,
+      "point_winner": 1,
+      "raw": "4fb2f1*",
+      "parsed": true,
+      "serve_number": 1,
+      "serve_direction": "wide",
+      "rally_length": 3,
+      "outcome": "winner",
+      "error_location": null,
+      "ending_stroke": "groundstroke",
+      "ending_wing": "forehand",
+      "is_ace": false,
+      "is_double_fault": false,
+      "is_serve_and_volley": false,
+      "shots": [
+        {"number": 1, "code": "4", "stroke": "serve", "wing": null, "direction": null, "depth": null, "position": null},
+        {"number": 2, "code": "f", "stroke": "groundstroke", "wing": "forehand", "direction": "backhand_side", "depth": "deep", "position": null},
+        {"number": 3, "code": "f", "stroke": "groundstroke", "wing": "forehand", "direction": "forehand_side", "depth": null, "position": null}
+      ]
+    },
+    {
+      "point": 2,
+      "set": [0, 0],
+      "games": [0, 0],
+      "score": "15-0",
+      "game": 1,
+      "is_tiebreak": false,
+      "server": 1,
+      "point_winner": 2,
+      "raw": "6;5xw@",
+      "parsed": false,
+      "serve_number": 2,
+      "serve_direction": "body",
+      "rally_length": 0,
+      "outcome": "error",
+      "error_location": "wide",
+      "ending_stroke": null,
+      "ending_wing": null,
+      "is_ace": false,
+      "is_double_fault": true,
+      "is_serve_and_volley": false,
+      "shots": []
+    }
+  ],
+  "meta": {"limit": 2, "offset": 0, "count": 2, "total": 289, "has_more": true}
+}

@@ -176,6 +176,92 @@ func TestUpgradeRequiredNamesTheTier(t *testing.T) {
 			wantTier: TierBasic,
 		},
 		{
+			name: "the tape needs BASIC",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetMatchTape(ctx, 1, TapeParams{})
+				return err
+			},
+			wantTier: TierBasic,
+		},
+		{
+			name: "h2h needs BASIC",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetHeadToHead(ctx, "nadal", "djokovic")
+				return err
+			},
+			wantTier: TierBasic,
+		},
+		{
+			name: "the archive needs BASIC",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListArchiveMatches(ctx, ArchiveMatchesParams{})
+				return err
+			},
+			wantTier: TierBasic,
+		},
+		{
+			name: "history packages need PRO",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListHistoryPackages(ctx, HistoryPackagesParams{})
+				return err
+			},
+			wantTier: TierPro,
+		},
+		{
+			// The two rankings modes are gated apart: the listing is PRO...
+			name: "rankings listing needs PRO",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListRankings(ctx, RankingsParams{System: []RankingSystem{RankingATP}})
+				return err
+			},
+			wantTier: TierPro,
+		},
+		{
+			// ...while per-player as-of records are ULTRA.
+			name: "per-player rankings need ULTRA",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListRankings(ctx, RankingsParams{Player: []int64{2317}})
+				return err
+			},
+			wantTier: TierUltra,
+		},
+		{
+			name:     "statistics need ULTRA",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatchStatistics(ctx, 1); return err },
+			wantTier: TierUltra,
+		},
+		{
+			name: "rally needs ULTRA",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListRallyMatches(ctx, RallyMatchesParams{})
+				return err
+			},
+			wantTier: TierUltra,
+		},
+		{
+			// Reached through a /history path, but the ULTRA rally marker must
+			// win over the broad BASIC history one.
+			name: "rally by our match id needs ULTRA",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetMatchRally(ctx, 1, ListParams{})
+				return err
+			},
+			wantTier: TierUltra,
+		},
+		{
+			name: "charting needs ULTRA",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetChartingPlayer(ctx, ChartingPlayerParams{Name: "invented"})
+				return err
+			},
+			wantTier: TierUltra,
+		},
+		{
+			name:     "the push-feed token needs ULTRA",
+			call:     func(ctx context.Context, c *Client) error { _, err := c.GetWSToken(ctx); return err },
+			wantTier: TierUltra,
+		},
+		{
 			// A FREE-floor endpoint has no upgrade to suggest, so the tier is
 			// left empty rather than guessed at.
 			name: "a free endpoint names no tier",
@@ -558,6 +644,118 @@ func TestParseRetryAfterHTTPDate(t *testing.T) {
 	got, ok = parseRetryAfter(past)
 	if !ok || got != 0 {
 		t.Errorf("a past date should yield 0, got %v (ok=%v)", got, ok)
+	}
+}
+
+// The API's three 429 shapes carry different recovery information, and each
+// piece must land on the error rather than stay buried in the body.
+func TestRateLimitedShapes(t *testing.T) {
+	t.Run("per-minute window", func(t *testing.T) {
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Retry-After", "31")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"rate_limited","tier":"free","upgrade_url":"https://livetennisapi.com/subscribe/upgrade"}`))
+		}), WithMaxRetries(0))
+
+		_, err := client.ListMatches(t.Context(), ListMatchesParams{})
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("error = %v, want an *APIError", err)
+		}
+		if apiErr.Scope != "" {
+			t.Errorf("Scope = %q, want empty for the minute window", apiErr.Scope)
+		}
+		if !apiErr.ResetsAt.IsZero() || !apiErr.RetryAt.IsZero() {
+			t.Error("a minute-window 429 carries no ResetsAt or RetryAt")
+		}
+	})
+
+	t.Run("daily quota", func(t *testing.T) {
+		// The resets_at instant is derived from the account's local midnight
+		// — an absolute ISO instant, never a fixed UTC hour.
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"rate_limited","scope":"day","limit_per_day":100,"resets_at":"2026-08-07T21:00:00Z"}`))
+		}), WithMaxRetries(0))
+
+		_, err := client.ListMatches(t.Context(), ListMatchesParams{})
+		if !errors.Is(err, ErrRateLimited) {
+			t.Fatalf("error = %v, want ErrRateLimited", err)
+		}
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("error = %v, want an *APIError", err)
+		}
+		if apiErr.Scope != "day" {
+			t.Errorf("Scope = %q, want day", apiErr.Scope)
+		}
+		if apiErr.LimitPerDay == nil || *apiErr.LimitPerDay != 100 {
+			t.Errorf("LimitPerDay = %v, want 100", apiErr.LimitPerDay)
+		}
+		want := time.Date(2026, 8, 7, 21, 0, 0, 0, time.UTC)
+		if !apiErr.ResetsAt.Equal(want) {
+			t.Errorf("ResetsAt = %v, want %v", apiErr.ResetsAt, want)
+		}
+		if !strings.Contains(err.Error(), "2026-08-07T21:00:00Z") {
+			t.Errorf("message should carry the reset instant, got %q", err.Error())
+		}
+	})
+
+	t.Run("abuse throttle", func(t *testing.T) {
+		client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"abuse_throttled","retry_at_epoch":1786572000}`))
+		}), WithMaxRetries(0))
+
+		_, err := client.ListMatches(t.Context(), ListMatchesParams{})
+		if !errors.Is(err, ErrRateLimited) {
+			t.Fatalf("error = %v, want ErrRateLimited", err)
+		}
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("error = %v, want an *APIError", err)
+		}
+		if apiErr.Code != "abuse_throttled" {
+			t.Errorf("Code = %q, want abuse_throttled", apiErr.Code)
+		}
+		if want := time.Unix(1786572000, 0).UTC(); !apiErr.RetryAt.Equal(want) {
+			t.Errorf("RetryAt = %v, want %v", apiErr.RetryAt, want)
+		}
+		// The block exists because of a broken retry loop; the message says so.
+		if !strings.Contains(err.Error(), "retry loop") {
+			t.Errorf("message should point at the retry loop, got %q", err.Error())
+		}
+	})
+}
+
+// An ambiguous name fragment is refused with the candidate list, because two
+// people summed into one head-to-head is a wrong answer.
+func TestAmbiguousNameSurfacesCandidates(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":"ambiguous_name","side":"p1","candidates":["Rafael Nadal","Toni Nadal"],"detail":"the fragment matches more than one player — pass a more specific name"}`))
+	}), WithMaxRetries(0))
+
+	_, err := client.GetHeadToHead(t.Context(), "nadal", "djokovic")
+	if !errors.Is(err, ErrBadRequest) {
+		t.Fatalf("error = %v, want ErrBadRequest", err)
+	}
+
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("error = %v, want an *APIError", err)
+	}
+	if apiErr.Code != "ambiguous_name" {
+		t.Errorf("Code = %q, want ambiguous_name", apiErr.Code)
+	}
+	if len(apiErr.Candidates) != 2 || apiErr.Candidates[0] != "Rafael Nadal" {
+		t.Errorf("Candidates = %v, want the two Nadals", apiErr.Candidates)
+	}
+	if apiErr.Detail == "" {
+		t.Error("Detail should carry the API's explanation")
+	}
+	if !strings.Contains(err.Error(), "Toni Nadal") {
+		t.Errorf("message should list the candidates, got %q", err.Error())
 	}
 }
 

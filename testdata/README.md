@@ -36,12 +36,29 @@ receives from production. Single-match fetches of completed matches
 
 ## `testdata/synthetic/*.json` — hand-written, NOT recordings
 
-These model PRO and ULTRA payloads. They could not be recorded: the key used for
-the capture is FREE tier, and every one of these endpoints answers it with
-`403 {"error":"upgrade_required"}` — which is itself recorded above, in
-`error_403_upgrade_required.json`.
+These model BASIC, PRO and ULTRA payloads. They could not be recorded: the key
+used for the capture is FREE tier, and every one of these endpoints answers it
+with `403 {"error":"upgrade_required"}` — which is itself recorded above, in
+`error_403_upgrade_required.json` and `error_403_history.json`.
 
 Their **shapes** follow `components/schemas` in the OpenAPI spec, but their
-**values are invented**. They exist to exercise decoding of `Market`, `Price`,
-`Analysis`, `Thesis`, `Profile` and `Event`. Re-record them against a PRO or
-ULTRA key before trusting them as a contract.
+**values are invented**. Re-record them against an entitled key before
+trusting them as a contract.
+
+| File | Models | Tier of the real endpoint |
+|---|---|---|
+| `markets.json`, `market_prices.json` | `Market`, `Price` | PRO |
+| `events.json` | `Event` | PRO |
+| `analysis.json`, `analysis_uncovered.json` | `Analysis`, `Thesis`, `Profile` | ULTRA |
+| `tape.json` | `MatchTape`, `TapeRow`, `SetTiebreak`, `TapeMeta` | BASIC |
+| `h2h.json` | `HeadToHead`, `H2HMeeting` | BASIC (stats block ULTRA) |
+| `archive_matches.json`, `archive_match.json` | `ArchiveMatch`, `ArchivePlayer`, `ArchiveMatchStats` | BASIC |
+| `archive_players.json` | `ArchivePlayerBio` | BASIC |
+| `archive_career.json` | `ArchiveCareer` | BASIC |
+| `rankings_listing.json` | `RankingRecord`, `RankingsMeta` (listing mode) | PRO |
+| `rankings_players.json` | `RankingRecord`, `RankingsMeta` (per-player mode) | ULTRA |
+| `statistics.json` | `MatchStatistics`, `StatisticsSide` | ULTRA |
+| `rally_matches.json`, `rally_match.json` | `RallyMatch`, `RallyPoint`, `RallyShot` | ULTRA |
+| `charting_player.json`, `charting_match.json` | `ChartingPlayer`, `ChartingMatch` | ULTRA |
+| `history_packages.json` | `HistoryPackage`, `PackageFile` | PRO |
+| `ws_token.json` | `WSToken`, `WSChannels` | ULTRA |

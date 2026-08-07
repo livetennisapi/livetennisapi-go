@@ -1,0 +1,39 @@
+{
+  "data": [
+    {
+      "rally_match_id": 118203,
+      "source_id": "20260607-M-Roland_Garros-F-Invented_One-Invented_Two",
+      "match_id": 31882,
+      "date": "2026-06-07",
+      "tournament": "Roland Garros",
+      "round": "F",
+      "surface": "clay",
+      "gender": "M",
+      "best_of": 5,
+      "players": [
+        {"name": "Invented One", "hand": "R"},
+        {"name": "Invented Two", "hand": "L"}
+      ],
+      "points": 289,
+      "points_parsed": 287
+    },
+    {
+      "rally_match_id": 4021,
+      "source_id": "19800705-M-Wimbledon-F-Invented_Three-Invented_Four",
+      "match_id": null,
+      "date": "1980-07-05",
+      "tournament": "Wimbledon",
+      "round": "F",
+      "surface": "grass",
+      "gender": "M",
+      "best_of": 5,
+      "players": [
+        {"name": "Invented Three", "hand": "L"},
+        {"name": "Invented Four", "hand": "R"}
+      ],
+      "points": 331,
+      "points_parsed": 322
+    }
+  ],
+  "meta": {"limit": 2, "offset": 0, "count": 2, "total": 11646, "has_more": true}
+}

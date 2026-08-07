@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "period": "2026-07",
+      "status": "ready",
+      "match_count": 10412,
+      "row_count": 2381554,
+      "files": [
+        {"format": "jsonl", "filename": "tapes-2026-07.jsonl.gz", "bytes": 181203344, "sha256": "1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e"},
+        {"format": "csv", "filename": "tapes-2026-07.csv.gz", "bytes": 122077211, "sha256": "0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b"}
+      ],
+      "built_at": "2026-08-01T04:12:00Z"
+    },
+    {
+      "period": "2026-06",
+      "status": "ready",
+      "match_count": 1893,
+      "row_count": 96210,
+      "files": [
+        {"format": "jsonl", "filename": "rankings-2026-06.jsonl.gz", "bytes": 4203344, "sha256": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e1f0e9d8c7b6a5f4e3d2c1b0a"}
+      ],
+      "built_at": "2026-07-01T04:10:00Z",
+      "kind": "rankings"
+    }
+  ],
+  "meta": {"count": 2}
+}

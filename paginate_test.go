@@ -94,6 +94,69 @@ func TestPaginateWalksEveryPage(t *testing.T) {
 	}
 }
 
+// The coverage-filtered history listing cuts the page BEFORE the filter
+// runs, so a page can come back short — even empty — while later pages still
+// hold matches. When the API says has_more, Paginate must believe it over
+// the short-page heuristic, and advance the offset by the limit rather than
+// by the rows received.
+func TestPaginateHonoursHasMore(t *testing.T) {
+	// Three pre-filter pages of 10; the filter keeps 2, 0 and 1 rows.
+	pages := []struct {
+		kept    int
+		hasMore bool
+	}{
+		{kept: 2, hasMore: true},
+		{kept: 0, hasMore: true},
+		{kept: 1, hasMore: false},
+	}
+
+	var requests int
+	var offsets []int
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		offsets = append(offsets, offset)
+		page := pages[requests]
+		requests++
+
+		items := make([]string, 0, page.kept)
+		for i := range page.kept {
+			items = append(items, fmt.Sprintf(`{"id":%d}`, offset+i))
+		}
+		fmt.Fprintf(w, `{"data":[%s],"meta":{"limit":10,"offset":%d,"count":%d,"has_more":%v}}`,
+			join(items), offset, page.kept, page.hasMore)
+	}))
+
+	seq := Paginate(t.Context(),
+		func(ctx context.Context, p ListParams) (*Page[Match], error) {
+			return client.ListHistoryMatches(ctx, HistoryMatchesParams{
+				Coverage:   CoverageFromStart,
+				ListParams: p,
+			})
+		}, 10)
+
+	items := 0
+	for _, err := range seq {
+		if err != nil {
+			t.Fatalf("iteration error: %v", err)
+		}
+		items++
+	}
+
+	if items != 3 {
+		t.Errorf("yielded %d items, want 3", items)
+	}
+	if requests != 3 {
+		t.Errorf("made %d requests, want 3: short filtered pages must not end iteration while has_more is true", requests)
+	}
+	// The offset space is the pre-filter one.
+	want := []int{0, 10, 20}
+	for i, offset := range offsets {
+		if offset != want[i] {
+			t.Errorf("request %d used offset %d, want %d", i, offset, want[i])
+		}
+	}
+}
+
 func TestPaginateStopsEarlyWhenTheLoopBreaks(t *testing.T) {
 	var requests int
 	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

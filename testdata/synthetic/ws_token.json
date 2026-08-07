@@ -1,0 +1,6 @@
+{
+  "token": "eyJhbGciOiJIUzI1NiJ9.invented.signature",
+  "expires_in": 300,
+  "ws_url": "wss://api.livetennisapi.com/connection/websocket",
+  "channels": {"match": "match:{match_id}", "slate": "slate:all"}
+}

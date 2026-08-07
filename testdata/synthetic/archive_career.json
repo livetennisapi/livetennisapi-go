@@ -1,0 +1,39 @@
+{
+  "player": {"name": "Rafael Nadal"},
+  "span": {"first": "2001-04-29", "last": "2022-11-13"},
+  "record": {
+    "wins": 1068,
+    "losses": 220,
+    "titles": 92,
+    "by_surface": {
+      "clay": {"wins": 474, "losses": 45},
+      "hard": {"wins": 455, "losses": 135},
+      "grass": {"wins": 71, "losses": 21}
+    },
+    "by_level": {
+      "G": {"wins": 314, "losses": 44},
+      "M": {"wins": 410, "losses": 100}
+    }
+  },
+  "by_year": [
+    {"year": 2005, "wins": 79, "losses": 10},
+    {"year": 2022, "wins": 39, "losses": 8}
+  ],
+  "serve": {
+    "matches_with_stats": 1233,
+    "aces": 4180,
+    "double_faults": 2211,
+    "serve_points": 99120,
+    "first_in": 67230,
+    "first_won": 47811,
+    "second_won": 18120,
+    "serve_games": 15602,
+    "bp_saved": 4522,
+    "bp_faced": 6801,
+    "first_in_pct": 0.678,
+    "first_won_pct": 0.711,
+    "second_won_pct": 0.568,
+    "bp_saved_pct": 0.665,
+    "aces_per_match": 3.39
+  }
+}

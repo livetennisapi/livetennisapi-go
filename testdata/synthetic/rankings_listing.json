@@ -1,0 +1,45 @@
+{
+  "data": [
+    {
+      "player_id": 2317,
+      "player_name": "Carlos Alcaraz",
+      "system": "atp",
+      "tour": "atp",
+      "rank": 1,
+      "points": 9860,
+      "previous_rank": 2,
+      "rank_movement": null,
+      "rating": null,
+      "effective_date": "2026-08-03",
+      "observed_at": "2026-08-03T06:00:00Z"
+    },
+    {
+      "player_id": null,
+      "player_name": "Invented Outsider",
+      "system": "atp",
+      "tour": "atp",
+      "rank": 2,
+      "points": 8770,
+      "previous_rank": 1,
+      "rank_movement": null,
+      "rating": null,
+      "effective_date": "2026-08-03",
+      "observed_at": "2026-08-03T06:00:00Z"
+    }
+  ],
+  "meta": {
+    "limit": 2,
+    "offset": 0,
+    "count": 2,
+    "total": 2000,
+    "has_more": true,
+    "coverage": {
+      "as_of": "2026-08-06",
+      "players_requested": 0,
+      "players_resolved": 0,
+      "systems_requested": ["atp"],
+      "systems_resolved": ["atp"],
+      "oldest_available": {"atp": "2023-01-02"}
+    }
+  }
+}

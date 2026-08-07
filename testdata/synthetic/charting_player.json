@@ -1,0 +1,11 @@
+{
+  "player": {"name": "Invented One", "gender": "men"},
+  "matches_charted": 412,
+  "coverage": "curated — concentrated on the majors, not full-slate",
+  "families": {
+    "serve_placement": {"deuce_wide": 812, "deuce_body": 233, "deuce_t": 901, "ad_wide": 744, "ad_body": 218, "ad_t": 866},
+    "return_depth": {"shallow": 1204, "mid": 2110, "deep": 1876},
+    "net_points": {"points": 890, "won": 601},
+    "serve_and_volley": {"points": 71, "won": 49}
+  }
+}

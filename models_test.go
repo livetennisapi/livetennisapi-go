@@ -825,3 +825,528 @@ func TestBadTimestampDoesNotFailTheResponse(t *testing.T) {
 		t.Errorf("Raw = %q, want the original string preserved", page.Data[0].ScheduledTime.Raw)
 	}
 }
+
+// The tape carries the fields backtesters live on: per-set tiebreak scores,
+// the clean-sequence point winner, and the null timestamp that marks a
+// reconstructed row. All three must survive decoding exactly.
+func TestTapeDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/tape.json")))
+
+	tape, err := client.GetMatchTape(t.Context(), 21635, TapeParams{Sequence: SequenceClean})
+	if err != nil {
+		t.Fatalf("GetMatchTape: %v", err)
+	}
+
+	// The match header carries the new identity fields.
+	m := tape.Match
+	if m.Tour != TourITF {
+		t.Errorf("Match.Tour = %q, want itf — and typed, so this compares against the constant", m.Tour)
+	}
+	if m.TournamentID != "itf-m15-kursumlijska-banja-m" {
+		t.Errorf("TournamentID = %q", m.TournamentID)
+	}
+	if m.RoundCode != "R32" {
+		t.Errorf("RoundCode = %q, want R32", m.RoundCode)
+	}
+	if m.Withdrew != nil {
+		t.Errorf("Withdrew = %v, want nil on a normally-completed match", *m.Withdrew)
+	}
+
+	if len(tape.Tape) != 3 {
+		t.Fatalf("tape rows = %d, want 3", len(tape.Tape))
+	}
+
+	// Row 0 is reconstructed: zero timestamp, nil model fields, nil winner
+	// (the first row has no attributable transition).
+	first := tape.Tape[0]
+	if !first.Timestamp.IsZero() {
+		t.Errorf("reconstructed row Timestamp = %v, want zero", first.Timestamp)
+	}
+	if first.WinProbabilityP1 != nil || first.Danger != nil {
+		t.Error("reconstructed row model fields should be nil")
+	}
+	if first.PointWinner != nil {
+		t.Errorf("first row PointWinner = %d, want nil", *first.PointWinner)
+	}
+
+	// Row 1 was observed: real timestamp, model fields, and a point winner.
+	second := tape.Tape[1]
+	if second.Timestamp.IsZero() {
+		t.Error("observed row should carry a real timestamp")
+	}
+	if second.PointWinner == nil || *second.PointWinner != 1 {
+		t.Errorf("PointWinner = %v, want 1", second.PointWinner)
+	}
+	if second.WinProbabilityP1 == nil || *second.WinProbabilityP1 != 0.52 {
+		t.Errorf("WinProbabilityP1 = %v, want 0.52", second.WinProbabilityP1)
+	}
+
+	// The embedded Score keeps its helpers: the last row is 6-4 6-6 mid-tiebreak.
+	if p1, p2, ok := tape.Tape[2].GamesForSet(1); !ok || p1 != 6 || p2 != 6 {
+		t.Errorf("GamesForSet(1) = %d-%d ok=%v, want 6-6 true", p1, p2, ok)
+	}
+	if !tape.Tape[2].IsTiebreak {
+		t.Error("last row should be in a tiebreak")
+	}
+
+	// Tiebreaks align to sets: none in set 1, 7-5 in set 2. A set with no
+	// breaker is nil, not zero-zero.
+	if len(tape.Tiebreaks) != 2 {
+		t.Fatalf("tiebreaks = %d entries, want 2", len(tape.Tiebreaks))
+	}
+	if tape.Tiebreaks[0] != nil {
+		t.Errorf("set 1 tiebreak = %+v, want nil", tape.Tiebreaks[0])
+	}
+	if tb := tape.Tiebreaks[1]; tb == nil || tb.P1 != 7 || tb.P2 != 5 {
+		t.Errorf("set 2 tiebreak = %+v, want 7-5", tb)
+	}
+
+	if len(tape.Profiles) != 1 || tape.Profiles[0].VolatilityRating != "med" {
+		t.Errorf("profiles = %+v, want one with volatility med", tape.Profiles)
+	}
+
+	meta := tape.Meta
+	if meta.Coverage != CoverageReconstructed || meta.PointSource != "mixed" {
+		t.Errorf("coverage/point_source = %q/%q, want reconstructed/mixed", meta.Coverage, meta.PointSource)
+	}
+	if meta.Sequence != SequenceClean || meta.RawRows != 210 || meta.UniqueStates != 184 {
+		t.Errorf("meta = %+v", meta)
+	}
+}
+
+func TestHeadToHeadDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/h2h.json")))
+
+	h2h, err := client.GetHeadToHead(t.Context(), "nadal", "djokovic")
+	if err != nil {
+		t.Fatalf("GetHeadToHead: %v", err)
+	}
+
+	if h2h.Players == nil || h2h.Players.P1.Name != "Rafael Nadal" {
+		t.Fatalf("players = %+v", h2h.Players)
+	}
+	// Undecided meetings are counted apart, never folded into the wins.
+	if h2h.Totals.P1Wins+h2h.Totals.P2Wins+h2h.Totals.Undecided != h2h.Totals.Meetings {
+		t.Errorf("totals do not add up: %+v", h2h.Totals)
+	}
+	if split := h2h.BySurface["clay"]; split.P1 != 20 || split.P2 != 9 {
+		t.Errorf("clay split = %+v, want 20-9", split)
+	}
+
+	if len(h2h.Meetings) != 4 {
+		t.Fatalf("meetings = %d, want 4", len(h2h.Meetings))
+	}
+	current := h2h.Meetings[0]
+	if current.Era != "current" || current.MatchID == nil || *current.MatchID != 31882 {
+		t.Errorf("current meeting = %+v, want era current with match_id 31882", current)
+	}
+	if current.ArchiveMatchID != nil {
+		t.Error("a current meeting carries no archive_match_id")
+	}
+	archive := h2h.Meetings[1]
+	if archive.Era != "archive" || archive.ArchiveMatchID == nil || *archive.ArchiveMatchID != 1447213 {
+		t.Errorf("archive meeting = %+v", archive)
+	}
+	if archive.Score != "6-2 4-6 6-2 7-6(4)" || archive.Level != "G" {
+		t.Errorf("archive meeting score/level = %q/%q", archive.Score, archive.Level)
+	}
+
+	// The walkover stays in the record with a nil winner and its outcome
+	// named, so a consumer can exclude it without losing it.
+	walkover := h2h.Meetings[3]
+	if walkover.Outcome != "walkover" || walkover.Winner != nil {
+		t.Errorf("walkover = %+v, want outcome walkover and nil winner", walkover)
+	}
+
+	// The ULTRA stats block is unpinned, but must survive verbatim.
+	if len(h2h.Stats) == 0 {
+		t.Error("Stats should carry the raw ULTRA block")
+	}
+}
+
+func TestArchiveDecoding(t *testing.T) {
+	t.Run("listing", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/archive_matches.json")))
+
+		page, err := client.ListArchiveMatches(t.Context(), ArchiveMatchesParams{})
+		if err != nil {
+			t.Fatalf("ListArchiveMatches: %v", err)
+		}
+		if page.Len() != 2 {
+			t.Fatalf("page length = %d, want 2", page.Len())
+		}
+
+		// The new envelope fields: total and has_more.
+		if page.Meta.Total == nil || *page.Meta.Total != 1485752 {
+			t.Errorf("Total = %v, want 1485752", page.Meta.Total)
+		}
+		if page.Meta.HasMore == nil || !*page.Meta.HasMore {
+			t.Errorf("HasMore = %v, want true", page.Meta.HasMore)
+		}
+
+		modern := page.Data[0]
+		if modern.Winner == nil || modern.Winner.Name != "Rafael Nadal" {
+			t.Fatalf("winner = %+v", modern.Winner)
+		}
+		// Rank is the rank AT THE TIME, and the corpus person id is not a
+		// roster id.
+		if modern.Winner.Rank == nil || *modern.Winner.Rank != 5 {
+			t.Errorf("winner rank = %v, want 5", modern.Winner.Rank)
+		}
+		if modern.Winner.PlayerID == nil || *modern.Winner.PlayerID != 104745 {
+			t.Errorf("winner player_id = %v, want 104745", modern.Winner.PlayerID)
+		}
+		if modern.Stats != nil {
+			t.Error("the listing carries no stats block")
+		}
+
+		// A 1973 row: the era's silence decodes as nil, and a retirement is
+		// parsed from the score's own vocabulary.
+		old := page.Data[1]
+		if old.Minutes != nil || old.Loser.Age != nil || old.Loser.Rank != nil {
+			t.Errorf("1973 row should be silent where the era was: %+v", old)
+		}
+		if old.Outcome != "retired" || old.Score != "6-3 RET" {
+			t.Errorf("outcome/score = %q/%q", old.Outcome, old.Score)
+		}
+		if old.Loser.Entry != "Q" {
+			t.Errorf("loser entry = %q, want Q", old.Loser.Entry)
+		}
+	})
+
+	t.Run("detail carries stats", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/archive_match.json")))
+
+		match, err := client.GetArchiveMatch(t.Context(), 1447213)
+		if err != nil {
+			t.Fatalf("GetArchiveMatch: %v", err)
+		}
+		if match.Stats == nil || match.Stats.Winner == nil {
+			t.Fatal("detail should carry the stats block")
+		}
+		if match.Stats.Winner.Aces == nil || *match.Stats.Winner.Aces != 3 {
+			t.Errorf("winner aces = %v, want 3", match.Stats.Winner.Aces)
+		}
+		if match.Stats.Loser.BPFaced == nil || *match.Stats.Loser.BPFaced != 13 {
+			t.Errorf("loser bp_faced = %v, want 13", match.Stats.Loser.BPFaced)
+		}
+	})
+
+	t.Run("players", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/archive_players.json")))
+
+		page, err := client.ListArchivePlayers(t.Context(), ArchivePlayersParams{})
+		if err != nil {
+			t.Fatalf("ListArchivePlayers: %v", err)
+		}
+		nadal := page.Data[0]
+		if nadal.CareerHighRank == nil || *nadal.CareerHighRank != 1 {
+			t.Errorf("career high = %v, want 1", nadal.CareerHighRank)
+		}
+		if nadal.CareerHighDate.IsZero() {
+			t.Error("career high date should parse")
+		}
+		// Nulls are the era's silence, never zeros.
+		sparse := page.Data[1]
+		if sparse.HeightCm != nil || sparse.CareerHighRank != nil || !sparse.DOB.IsZero() {
+			t.Errorf("sparse bio should stay nil/zero: %+v", sparse)
+		}
+	})
+
+	t.Run("career", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/archive_career.json")))
+
+		career, err := client.GetArchiveCareer(t.Context(), "nadal")
+		if err != nil {
+			t.Fatalf("GetArchiveCareer: %v", err)
+		}
+		if career.Player.Name != "Rafael Nadal" {
+			t.Errorf("name = %q", career.Player.Name)
+		}
+		if career.Record.Wins != 1068 || career.Record.Titles != 92 {
+			t.Errorf("record = %+v", career.Record)
+		}
+		if clay := career.Record.BySurface["clay"]; clay.Wins != 474 {
+			t.Errorf("clay record = %+v", clay)
+		}
+		if len(career.ByYear) != 2 || career.ByYear[0].Year != 2005 {
+			t.Errorf("by_year = %+v", career.ByYear)
+		}
+		// Coverage is stated, not implied: serve stats exist from 1991 only.
+		if career.Serve.MatchesWithStats != 1233 {
+			t.Errorf("matches_with_stats = %d", career.Serve.MatchesWithStats)
+		}
+		if career.Serve.FirstInPct == nil || *career.Serve.FirstInPct != 0.678 {
+			t.Errorf("first_in_pct = %v", career.Serve.FirstInPct)
+		}
+	})
+}
+
+func TestRankingsDecoding(t *testing.T) {
+	t.Run("listing mode", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/rankings_listing.json")))
+
+		page, err := client.ListRankings(t.Context(), RankingsParams{System: []RankingSystem{RankingATP}})
+		if err != nil {
+			t.Fatalf("ListRankings: %v", err)
+		}
+		if page.Len() != 2 {
+			t.Fatalf("page length = %d, want 2", page.Len())
+		}
+
+		first := page.Data[0]
+		if first.Rank == nil || *first.Rank != 1 {
+			t.Errorf("rank = %v, want 1", first.Rank)
+		}
+		if first.PreviousRank == nil || *first.PreviousRank != 2 {
+			t.Errorf("previous_rank = %v, want 2", first.PreviousRank)
+		}
+
+		// A listing row for a player outside the roster keeps its published
+		// name and a nil id — the table has no silent holes.
+		outsider := page.Data[1]
+		if outsider.PlayerID != nil {
+			t.Errorf("outsider player_id = %v, want nil", outsider.PlayerID)
+		}
+		if outsider.PlayerName != "Invented Outsider" {
+			t.Errorf("outsider name = %q", outsider.PlayerName)
+		}
+
+		coverage := page.Meta.Coverage
+		if len(coverage.SystemsResolved) != 1 || coverage.SystemsResolved[0] != "atp" {
+			t.Errorf("systems_resolved = %v", coverage.SystemsResolved)
+		}
+		if oldest, ok := coverage.OldestAvailable["atp"]; !ok || oldest.IsZero() {
+			t.Errorf("oldest_available[atp] = %v", oldest)
+		}
+		if page.Meta.HasMore == nil || !*page.Meta.HasMore {
+			t.Errorf("HasMore = %v, want true", page.Meta.HasMore)
+		}
+	})
+
+	t.Run("per-player mode never collapses systems", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/rankings_players.json")))
+
+		page, err := client.ListRankings(t.Context(), RankingsParams{Player: []int64{2317}})
+		if err != nil {
+			t.Fatalf("ListRankings: %v", err)
+		}
+
+		atp, utr := page.Data[0], page.Data[1]
+		if atp.System != RankingATP || atp.Rank == nil || atp.Points == nil {
+			t.Errorf("atp record = %+v", atp)
+		}
+		// UTR is a rating: rank and points are genuinely null, not zero.
+		if utr.System != RankingUTR {
+			t.Errorf("system = %q, want utr", utr.System)
+		}
+		if utr.Rank != nil || utr.Points != nil || utr.PreviousRank != nil {
+			t.Errorf("UTR rank/points should be nil: %+v", utr)
+		}
+		if utr.Rating == nil || *utr.Rating != 16.21 {
+			t.Errorf("rating = %v, want 16.21", utr.Rating)
+		}
+	})
+}
+
+func TestMatchStatisticsDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/statistics.json")))
+
+	stats, err := client.GetMatchStatistics(t.Context(), 21635)
+	if err != nil {
+		t.Fatalf("GetMatchStatistics: %v", err)
+	}
+
+	if stats.Coverage != "live" || stats.GamesCounted != 17 {
+		t.Errorf("coverage/games = %q/%d", stats.Coverage, stats.GamesCounted)
+	}
+	if stats.TiebreakGamesExcluded != 1 {
+		t.Errorf("tiebreak_games_excluded = %d, want 1", stats.TiebreakGamesExcluded)
+	}
+
+	// Each family carries its own coverage and age, on different clocks.
+	if stats.Freshness.Derived == nil || stats.Freshness.Measured == nil {
+		t.Fatal("both freshness families should be present")
+	}
+	if stats.Freshness.MeasuredDivergence != nil {
+		t.Error("the families agree, so measured_divergence should be nil")
+	}
+	if got := stats.Freshness.Measured.AgeSeconds; got == nil || *got != 35 {
+		t.Errorf("measured age = %v, want 35", got)
+	}
+	if d := stats.Freshness.Derived.Describes; d == nil || d.TotalGames != 17 {
+		t.Errorf("derived describes = %+v", d)
+	}
+
+	if stats.Players == nil || stats.Players.P1 == nil || stats.Players.P2 == nil {
+		t.Fatal("players missing")
+	}
+	p1, p2 := stats.Players.P1, stats.Players.P2
+
+	// Derived fields are typed.
+	if p1.HoldPct == nil || *p1.HoldPct != 89 {
+		t.Errorf("p1 hold_pct = %v, want 89", p1.HoldPct)
+	}
+	if p1.BreakPointsConverted != 2 || p1.PointsWon != 58 {
+		t.Errorf("p1 derived = %+v", p1)
+	}
+
+	// Measured is a map keyed by what was actually measured: p1's fixture
+	// carries the serve split, p2's only the tier-1 fields. An absent key is
+	// absent, and a present 0 is a real measured zero.
+	if got := p1.Measured["aces"]; got != 4 {
+		t.Errorf("p1 measured aces = %d, want 4", got)
+	}
+	if got, ok := p1.Measured["winners_total"]; !ok || got != 0 {
+		t.Errorf("p1 winners_total = %d ok=%v, want a real measured 0", got, ok)
+	}
+	if _, ok := p2.Measured["first_serves_in"]; ok {
+		t.Error("p2 has no serve split measured, so the key must be absent")
+	}
+	if got := p2.Measured["double_faults"]; got != 3 {
+		t.Errorf("p2 double_faults = %d, want 3", got)
+	}
+}
+
+func TestRallyAndChartingDecoding(t *testing.T) {
+	t.Run("rally listing", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/rally_matches.json")))
+
+		page, err := client.ListRallyMatches(t.Context(), RallyMatchesParams{})
+		if err != nil {
+			t.Fatalf("ListRallyMatches: %v", err)
+		}
+
+		linked := page.Data[0]
+		if linked.MatchID == nil || *linked.MatchID != 31882 {
+			t.Errorf("linked match_id = %v, want 31882", linked.MatchID)
+		}
+		// Most charted matches predate the API's own collection: no link.
+		unlinked := page.Data[1]
+		if unlinked.MatchID != nil {
+			t.Errorf("1980 match_id = %v, want nil", unlinked.MatchID)
+		}
+		if unlinked.Points != 331 || unlinked.PointsParsed != 322 {
+			t.Errorf("points = %d/%d", unlinked.Points, unlinked.PointsParsed)
+		}
+	})
+
+	t.Run("rally detail", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/rally_match.json")))
+
+		detail, err := client.GetRallyMatch(t.Context(), 118203, ListParams{Limit: 2})
+		if err != nil {
+			t.Fatalf("GetRallyMatch: %v", err)
+		}
+		if detail.RallyMatchID != 118203 || len(detail.Rally) != 2 {
+			t.Fatalf("detail = %d rally rows for %d", len(detail.Rally), detail.RallyMatchID)
+		}
+		// Meta.Total is the match's full point count, not the page's.
+		if detail.Meta.Total == nil || *detail.Meta.Total != 289 {
+			t.Errorf("Total = %v, want 289", detail.Meta.Total)
+		}
+
+		clean := detail.Rally[0]
+		if !clean.Parsed || clean.Outcome != "winner" || clean.ServeDirection != "wide" {
+			t.Errorf("clean point = %+v", clean)
+		}
+		if clean.RallyLength == nil || *clean.RallyLength != 3 || len(clean.Shots) != 3 {
+			t.Errorf("rally length/shots = %v/%d", clean.RallyLength, len(clean.Shots))
+		}
+		if s := clean.Shots[1]; s.Stroke != "groundstroke" || s.Wing != "forehand" || s.Direction != "backhand_side" {
+			t.Errorf("shot 2 = %+v", s)
+		}
+
+		// The raw notation is always kept, even when parsing failed — and a
+		// double fault has rally length 0.
+		torn := detail.Rally[1]
+		if torn.Parsed {
+			t.Error("the second point should be marked unparsed")
+		}
+		if torn.Raw != "6;5xw@" {
+			t.Errorf("raw = %q, want the charter's string verbatim", torn.Raw)
+		}
+		if !torn.IsDoubleFault || torn.RallyLength == nil || *torn.RallyLength != 0 {
+			t.Errorf("double fault = %+v", torn)
+		}
+	})
+
+	t.Run("charting player and match", func(t *testing.T) {
+		client := newTestClient(t, serveBody(fixture(t, "synthetic/charting_player.json")))
+		player, err := client.GetChartingPlayer(t.Context(), ChartingPlayerParams{Name: "invented", Gender: "men"})
+		if err != nil {
+			t.Fatalf("GetChartingPlayer: %v", err)
+		}
+		if player.MatchesCharted != 412 {
+			t.Errorf("matches_charted = %d", player.MatchesCharted)
+		}
+		// The families are unpinned raw JSON, but must decode on demand.
+		var families map[string]map[string]int
+		if err := json.Unmarshal(player.Families, &families); err != nil {
+			t.Fatalf("families should hold raw JSON: %v", err)
+		}
+		if families["serve_placement"]["deuce_t"] != 901 {
+			t.Errorf("families = %+v", families)
+		}
+
+		client = newTestClient(t, serveBody(fixture(t, "synthetic/charting_match.json")))
+		match, err := client.GetChartingMatch(t.Context(), 118203)
+		if err != nil {
+			t.Fatalf("GetChartingMatch: %v", err)
+		}
+		if match.ChartingMatchID != 118203 || match.MCPID == "" || match.Gender != "M" {
+			t.Errorf("charting match = %+v", match)
+		}
+	})
+}
+
+func TestHistoryPackagesDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/history_packages.json")))
+
+	page, err := client.ListHistoryPackages(t.Context(), HistoryPackagesParams{})
+	if err != nil {
+		t.Fatalf("ListHistoryPackages: %v", err)
+	}
+	if len(page.Data) != 2 || page.Meta.Count != 2 {
+		t.Fatalf("packages = %d (count %d), want 2", len(page.Data), page.Meta.Count)
+	}
+
+	// A tape package carries no kind at all, so the zero value means tape.
+	tape := page.Data[0]
+	if tape.Kind != "" {
+		t.Errorf("tape package kind = %q, want empty", tape.Kind)
+	}
+	if len(tape.Files) != 2 || tape.Files[0].Format != "jsonl" || tape.Files[0].SHA256 == "" {
+		t.Errorf("tape files = %+v", tape.Files)
+	}
+	if tape.MatchCount == nil || *tape.MatchCount != 10412 {
+		t.Errorf("match_count = %v", tape.MatchCount)
+	}
+
+	rankings := page.Data[1]
+	if rankings.Kind != PackageRankings {
+		t.Errorf("kind = %q, want rankings", rankings.Kind)
+	}
+}
+
+// The push-feed token names the channels, including the slate:all firehose.
+func TestWSTokenDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/ws_token.json")))
+
+	token, err := client.GetWSToken(t.Context())
+	if err != nil {
+		t.Fatalf("GetWSToken: %v", err)
+	}
+	if token.Token == "" || token.ExpiresIn != 300 {
+		t.Errorf("token = %+v", token)
+	}
+	if token.WSURL != "wss://api.livetennisapi.com/connection/websocket" {
+		t.Errorf("ws_url = %q", token.WSURL)
+	}
+	if token.Channels.Match != "match:{match_id}" {
+		t.Errorf("match channel = %q", token.Channels.Match)
+	}
+	if token.Channels.Slate != "slate:all" {
+		t.Errorf("slate channel = %q, want slate:all", token.Channels.Slate)
+	}
+}

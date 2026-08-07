@@ -1,0 +1,41 @@
+{
+  "data": [
+    {
+      "player_id": 2317,
+      "system": "atp",
+      "tour": "atp",
+      "rank": 1,
+      "points": 9860,
+      "previous_rank": 2,
+      "rank_movement": null,
+      "rating": null,
+      "effective_date": "2026-08-03",
+      "observed_at": "2026-08-03T06:00:00Z"
+    },
+    {
+      "player_id": 2317,
+      "system": "utr",
+      "tour": null,
+      "rank": null,
+      "points": null,
+      "previous_rank": null,
+      "rank_movement": null,
+      "rating": 16.21,
+      "effective_date": "2026-08-03",
+      "observed_at": "2026-08-03T06:00:00Z"
+    }
+  ],
+  "meta": {
+    "limit": 50,
+    "offset": 0,
+    "count": 2,
+    "coverage": {
+      "as_of": null,
+      "players_requested": 1,
+      "players_resolved": 1,
+      "systems_requested": ["atp", "utr"],
+      "systems_resolved": ["atp", "utr"],
+      "oldest_available": {"atp": "2023-01-02", "utr": "2026-07-29"}
+    }
+  }
+}

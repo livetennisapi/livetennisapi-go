@@ -1,0 +1,65 @@
+{
+  "players": {"p1": {"name": "Rafael Nadal"}, "p2": {"name": "Novak Djokovic"}},
+  "totals": {"p1_wins": 29, "p2_wins": 31, "meetings": 61, "undecided": 1},
+  "by_surface": {
+    "clay": {"p1": 20, "p2": 9},
+    "hard": {"p1": 7, "p2": 20},
+    "grass": {"p1": 2, "p2": 2},
+    "unknown": {"p1": 0, "p2": 0}
+  },
+  "meetings": [
+    {
+      "era": "current",
+      "date": "2026-06-08",
+      "tournament": "Roland Garros",
+      "level": null,
+      "round": "Final",
+      "round_code": "F",
+      "surface": "clay",
+      "score": null,
+      "outcome": "completed",
+      "winner": 1,
+      "match_id": 31882
+    },
+    {
+      "era": "archive",
+      "date": "2022-05-22",
+      "tournament": "Roland Garros",
+      "level": "G",
+      "round": "QF",
+      "surface": "clay",
+      "score": "6-2 4-6 6-2 7-6(4)",
+      "outcome": "completed",
+      "winner": 1,
+      "archive_match_id": 1447213
+    },
+    {
+      "era": "archive",
+      "date": "2021-06-11",
+      "tournament": "Roland Garros",
+      "level": "G",
+      "round": "SF",
+      "surface": "clay",
+      "score": "3-6 6-3 7-6(4) 6-2",
+      "outcome": "completed",
+      "winner": 2,
+      "archive_match_id": 1381044
+    },
+    {
+      "era": "archive",
+      "date": "2019-10-30",
+      "tournament": "Paris Masters",
+      "level": "M",
+      "round": "SF",
+      "surface": "hard",
+      "score": "W/O",
+      "outcome": "walkover",
+      "winner": null,
+      "archive_match_id": 1290551
+    }
+  ],
+  "stats": {
+    "p1": {"archive_serve": {"meetings_with_stats": 55, "aces": 201}, "current": {"meetings_with_stats": 1, "aces": 3}},
+    "p2": {"archive_serve": {"meetings_with_stats": 55, "aces": 344}, "current": {"meetings_with_stats": 1, "aces": 7}}
+  }
+}
