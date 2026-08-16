@@ -693,7 +693,8 @@ func (c *Client) GetChartingMatch(ctx context.Context, chartingMatchID int64) (*
 // HistoryPackagesParams filters [Client.ListHistoryPackages].
 type HistoryPackagesParams struct {
 	// Kind is the package family: [PackageTape] (the API's default),
-	// [PackageRally] or [PackageRankings]. The non-tape kinds need ULTRA.
+	// [PackageRally], [PackageRankings] or [PackageArchive]. Rally and
+	// rankings need ULTRA; archive rides the tape entitlement.
 	Kind PackageKind
 
 	// Year asks for the year-archive listing — every published month of

@@ -1609,6 +1609,11 @@ const (
 
 	// PackageRankings is the as-of ranking records. ULTRA.
 	PackageRankings PackageKind = "rankings"
+
+	// PackageArchive is the results archive (1968–2022) as yearly exports —
+	// the period is the bare year "YYYY". Same entitlement as the tape
+	// packages, not ULTRA.
+	PackageArchive PackageKind = "archive"
 )
 
 // PackageFile is one downloadable file of a bulk package.
@@ -1627,7 +1632,8 @@ type PackageFile struct {
 // contiguous run of months and is still being extended backwards, so treat
 // the listing as the authoritative set of months that exist.
 type HistoryPackage struct {
-	// Period is the month, "YYYY-MM".
+	// Period is the month, "YYYY-MM" — or the bare year "YYYY" on the
+	// yearly kinds ([PackageRally], [PackageArchive]).
 	Period string `json:"period,omitempty"`
 
 	// Status is "ready" — only built months are listed or served.

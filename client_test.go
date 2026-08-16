@@ -432,6 +432,16 @@ func TestEndpointRequestShape(t *testing.T) {
 			wantQuery: url.Values{"kind": {"rankings"}, "year": {"2026"}},
 		},
 		{
+			name:    "history packages archive kind",
+			fixture: "synthetic/history_packages.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.ListHistoryPackages(ctx, HistoryPackagesParams{Kind: PackageArchive})
+				return err
+			},
+			wantPath:  "/history/packages",
+			wantQuery: url.Values{"kind": {"archive"}},
+		},
+		{
 			name:     "ws token",
 			fixture:  "synthetic/ws_token.json",
 			call:     func(ctx context.Context, c *Client) error { _, err := c.GetWSToken(ctx); return err },

@@ -1307,8 +1307,8 @@ func TestHistoryPackagesDecoding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListHistoryPackages: %v", err)
 	}
-	if len(page.Data) != 2 || page.Meta.Count != 2 {
-		t.Fatalf("packages = %d (count %d), want 2", len(page.Data), page.Meta.Count)
+	if len(page.Data) != 3 || page.Meta.Count != 3 {
+		t.Fatalf("packages = %d (count %d), want 3", len(page.Data), page.Meta.Count)
 	}
 
 	// A tape package carries no kind at all, so the zero value means tape.
@@ -1326,6 +1326,15 @@ func TestHistoryPackagesDecoding(t *testing.T) {
 	rankings := page.Data[1]
 	if rankings.Kind != PackageRankings {
 		t.Errorf("kind = %q, want rankings", rankings.Kind)
+	}
+
+	// An archive package is yearly: its period is the bare year.
+	archive := page.Data[2]
+	if archive.Kind != PackageArchive {
+		t.Errorf("kind = %q, want archive", archive.Kind)
+	}
+	if archive.Period != "1999" {
+		t.Errorf("archive period = %q, want a bare year", archive.Period)
 	}
 }
 

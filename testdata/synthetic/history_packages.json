@@ -21,7 +21,18 @@
       ],
       "built_at": "2026-07-01T04:10:00Z",
       "kind": "rankings"
+    },
+    {
+      "period": "1999",
+      "status": "ready",
+      "match_count": 4102,
+      "row_count": 4102,
+      "files": [
+        {"format": "jsonl", "filename": "archive-1999.jsonl.gz", "bytes": 1203344, "sha256": "7f6e5d4c3b2a1f0e9f8e7d6c5b4a3f2e1d0c9b8a1f0e9d8c7b6a5f4e3d2c1b0a"}
+      ],
+      "built_at": "2026-07-01T04:11:00Z",
+      "kind": "archive"
     }
   ],
-  "meta": {"count": 2}
+  "meta": {"count": 3}
 }
