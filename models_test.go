@@ -826,6 +826,39 @@ func TestBadTimestampDoesNotFailTheResponse(t *testing.T) {
 	}
 }
 
+// EventStatusUpdatedAt (added 2026-08-19) is the instant the current
+// EventStatus was recorded. Set, it decodes as a UTC timestamp; null or
+// absent — every match from before the field was introduced — stays zero,
+// because it is never backfilled.
+func TestEventStatusUpdatedAtDecoding(t *testing.T) {
+	var stamped Match
+	err := json.Unmarshal([]byte(
+		`{"id":1,"event_status":"Walk Over","event_status_updated_at":"2026-08-19T09:15:00Z"}`), &stamped)
+	if err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	want := time.Date(2026, 8, 19, 9, 15, 0, 0, time.UTC)
+	if !stamped.EventStatusUpdatedAt.Equal(want) {
+		t.Errorf("EventStatusUpdatedAt = %v, want %v", stamped.EventStatusUpdatedAt, want)
+	}
+
+	var nulled Match
+	if err := json.Unmarshal([]byte(`{"id":2,"event_status_updated_at":null}`), &nulled); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !nulled.EventStatusUpdatedAt.IsZero() {
+		t.Errorf("null EventStatusUpdatedAt = %v, want zero", nulled.EventStatusUpdatedAt)
+	}
+
+	var absent Match
+	if err := json.Unmarshal([]byte(`{"id":3}`), &absent); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !absent.EventStatusUpdatedAt.IsZero() {
+		t.Errorf("absent EventStatusUpdatedAt = %v, want zero", absent.EventStatusUpdatedAt)
+	}
+}
+
 // The tape carries the fields backtesters live on: per-set tiebreak scores,
 // the clean-sequence point winner, and the null timestamp that marks a
 // reconstructed row. All three must survive decoding exactly.

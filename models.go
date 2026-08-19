@@ -365,6 +365,13 @@ type Match struct {
 	// suspension reason. Empty when unset.
 	EventStatus string `json:"event_status,omitempty"`
 
+	// EventStatusUpdatedAt is the instant the current EventStatus was
+	// recorded, UTC (added 2026-08-19). It bumps only when the value changes
+	// — a re-read of the same status never moves it — and a clear back to
+	// empty bumps it too. Zero while the status has never changed since the
+	// field was introduced: never backfilled, never guessed.
+	EventStatusUpdatedAt Time `json:"event_status_updated_at,omitzero"`
+
 	// IsDoubles reports whether this is a doubles match.
 	IsDoubles bool `json:"is_doubles,omitempty"`
 
