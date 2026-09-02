@@ -859,6 +859,46 @@ func TestEventStatusUpdatedAtDecoding(t *testing.T) {
 	}
 }
 
+// HasAnalysis and HasMarket (added 2026-09-02) carry, on every list row and
+// the detail, the same fact GetMatchAnalysis / GetMarketPrices answer 404
+// no_analysis / no_market about. Both booleans must survive as given — true
+// and false alike — and stay nil, not false, when an older server omits them.
+func TestHasAnalysisHasMarketDecoding(t *testing.T) {
+	var covered Match
+	err := json.Unmarshal([]byte(`{"id":1,"has_analysis":true,"has_market":true}`), &covered)
+	if err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if covered.HasAnalysis == nil || !*covered.HasAnalysis {
+		t.Errorf("HasAnalysis = %v, want true", covered.HasAnalysis)
+	}
+	if covered.HasMarket == nil || !*covered.HasMarket {
+		t.Errorf("HasMarket = %v, want true", covered.HasMarket)
+	}
+
+	var bare Match
+	if err := json.Unmarshal([]byte(`{"id":2,"has_analysis":false,"has_market":false}`), &bare); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if bare.HasAnalysis == nil || *bare.HasAnalysis {
+		t.Errorf("HasAnalysis = %v, want false (present, not nil)", bare.HasAnalysis)
+	}
+	if bare.HasMarket == nil || *bare.HasMarket {
+		t.Errorf("HasMarket = %v, want false (present, not nil)", bare.HasMarket)
+	}
+
+	var absent Match
+	if err := json.Unmarshal([]byte(`{"id":3}`), &absent); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if absent.HasAnalysis != nil {
+		t.Errorf("absent HasAnalysis = %v, want nil", *absent.HasAnalysis)
+	}
+	if absent.HasMarket != nil {
+		t.Errorf("absent HasMarket = %v, want nil", *absent.HasMarket)
+	}
+}
+
 // The tape carries the fields backtesters live on: per-set tiebreak scores,
 // the clean-sequence point winner, and the null timestamp that marks a
 // reconstructed row. All three must survive decoding exactly.
@@ -883,6 +923,12 @@ func TestTapeDecoding(t *testing.T) {
 	}
 	if m.Withdrew != nil {
 		t.Errorf("Withdrew = %v, want nil on a normally-completed match", *m.Withdrew)
+	}
+	if m.HasAnalysis == nil || !*m.HasAnalysis {
+		t.Errorf("HasAnalysis = %v, want true from the fixture", m.HasAnalysis)
+	}
+	if m.HasMarket == nil || *m.HasMarket {
+		t.Errorf("HasMarket = %v, want false from the fixture", m.HasMarket)
 	}
 
 	if len(tape.Tape) != 3 {

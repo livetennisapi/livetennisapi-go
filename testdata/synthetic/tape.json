@@ -19,7 +19,9 @@
     },
     "score": null,
     "winner": 1,
-    "withdrew": null
+    "withdrew": null,
+    "has_analysis": true,
+    "has_market": false
   },
   "tape": [
     {

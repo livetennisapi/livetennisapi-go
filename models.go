@@ -396,6 +396,18 @@ type Match struct {
 	// by the rules of the sport. nil everywhere else.
 	Withdrew *int `json:"withdrew,omitempty"`
 
+	// HasAnalysis reports whether a model thesis or profile exists for this
+	// match (added 2026-09-02). Present on every list row and on the detail,
+	// every tier. Filter the slate on it before calling
+	// [Client.GetMatchAnalysis], which answers 404 no_analysis about the same
+	// fact. nil when talking to an older server.
+	HasAnalysis *bool `json:"has_analysis,omitempty"`
+
+	// HasMarket reports whether a match-winner market is mapped to this
+	// match (added 2026-09-02). Same role for [Client.GetMarketPrices], which
+	// answers 404 no_market. nil when talking to an older server.
+	HasMarket *bool `json:"has_market,omitempty"`
+
 	// Tape says what point-by-point data the API holds for this match.
 	// Populated by [Client.ListHistoryMatches] and [Client.ListCompletedMatches]
 	// only; nil everywhere else.

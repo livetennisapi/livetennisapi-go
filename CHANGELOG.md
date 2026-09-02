@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-09-02
+
+### Added
+
+- `Match.HasAnalysis` and `Match.HasMarket` (`has_analysis`, `has_market`):
+  two booleans on every row of `ListMatches` and on `GetMatch`, every tier
+  (API 1.9.0, shipped to production 2026-09-02). They carry the same fact
+  `GetMatchAnalysis` and `GetMarketPrices` answer `404 no_analysis` /
+  `404 no_market` about, so a slate is filtered in one call instead of one
+  404 per match. Both are `*bool`: nil when talking to an older server that
+  does not send them, never a guessed `false`.
+- `Match.EventStatusUpdatedAt` (`event_status_updated_at`): the instant the
+  current `EventStatus` was recorded, UTC (API 2026-08-19). Zero when the
+  status has never changed since the field was introduced — never backfilled.
+
 ## [1.2.1] — 2026-08-16
 
 ### Added
