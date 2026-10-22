@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `GetPlayerStats(ctx, playerID, PlayerStatsParams)` for `GET /players/{id}/stats`
+  (API 1.13.61). PRO returns `Records`: W/L overall and by surface, venue,
+  level and season, the set-based record, withdrawals and the last N matches.
+  ULTRA adds `ServeReturn`, the summed serve and return statistics; it is nil
+  below ULTRA. `PlayerStatsParams` takes `From`, `To`, `Surface`, `Level` and
+  `Last`. Every percentage is a `*float64`, nil on an empty sample.
+- `Player.HeightCM` (`height_cm`) and `Player.DoublesRanking`
+  (`doubles_ranking`): set by `GetPlayer` on paid tiers, nil on a FREE key.
+
 ## [1.3.0] — 2026-09-02
 
 ### Added

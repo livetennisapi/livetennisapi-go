@@ -1582,3 +1582,110 @@ func TestHistoryPackageManifestDecoding(t *testing.T) {
 		t.Errorf("files = %+v", manifest.Files)
 	}
 }
+
+func TestPlayerStatsDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/player_stats.json")))
+
+	report, err := client.GetPlayerStats(t.Context(), 2317, PlayerStatsParams{})
+	if err != nil {
+		t.Fatalf("GetPlayerStats: %v", err)
+	}
+	if report.Player.ID != 2317 || report.Filters.Surface != "clay" || report.Filters.Level != "" {
+		t.Errorf("player/filters = %+v %+v", report.Player, report.Filters)
+	}
+	if report.Window.From.IsZero() || report.Meta.GeneratedAt.IsZero() {
+		t.Error("window.from or meta.generated_at did not parse")
+	}
+	r := report.Records
+	if r == nil {
+		t.Fatal("Records missing")
+	}
+	if r.Overall.Matches != 30 || r.Overall.Wins != 18 || r.Overall.WinPct == nil || *r.Overall.WinPct != 60.0 {
+		t.Errorf("overall = %+v", r.Overall)
+	}
+	if got := r.BySeason["2025"].Wins; got != 18 {
+		t.Errorf("by_season 2025 wins = %d", got)
+	}
+	// An empty sample is null, never 0.
+	if r.Sets.DecidingSets.Played != 0 || r.Sets.DecidingSets.WinPct != nil {
+		t.Errorf("deciding_sets = %+v, want a nil pct on an empty sample", r.Sets.DecidingSets)
+	}
+	if r.Sets.Sample.Excluded.Retired != 2 || r.Withdrawals.Walkover.Received != 1 || r.Excluded.NotSingles != 4 {
+		t.Errorf("exclusions = %+v %+v %+v", r.Sets.Sample, r.Withdrawals, r.Excluded)
+	}
+	if len(r.Recent) != 2 {
+		t.Fatalf("recent = %d rows, want 2", len(r.Recent))
+	}
+	first := r.Recent[0]
+	if !first.Won || first.Score == nil || len(first.Score.Games) != 2 || first.Score.Games[0][2] != 7 {
+		t.Errorf("recent[0] = %+v", first)
+	}
+	if first.Date.Format("2006-01-02") != "2025-12-20" || first.Indoor == nil || *first.Indoor {
+		t.Errorf("recent[0] date/indoor = %v %v", first.Date, first.Indoor)
+	}
+	if second := r.Recent[1]; second.Score != nil || second.Outcome != "walkover" || second.Indoor != nil {
+		t.Errorf("recent[1] = %+v", second)
+	}
+
+	sr := report.ServeReturn
+	if sr == nil {
+		t.Fatal("ServeReturn missing on the ULTRA fixture")
+	}
+	if sr.MatchesWithStats != 20 || sr.Serve.Aces.Total == nil || *sr.Serve.Aces.Total != 80 {
+		t.Errorf("serve = %+v", sr.Serve)
+	}
+	if df := sr.Serve.DoubleFaults; df.Total != nil || df.Matches != 0 {
+		t.Errorf("double_faults = %+v, want nil total with matches 0", df)
+	}
+	if bp := sr.Return.BreakPointsConverted; bp.Numerator != nil || bp.Pct != nil {
+		t.Errorf("break_points_converted = %+v, want nil", bp)
+	}
+	if fs := sr.Serve.FirstServeIn; fs.Numerator == nil || *fs.Numerator != 600 || *fs.Denominator != 1000 {
+		t.Errorf("first_serve_in = %+v", fs)
+	}
+}
+
+// Below ULTRA the API omits serve_return entirely; it must decode to nil.
+func TestPlayerStatsWithoutServeReturn(t *testing.T) {
+	body := []byte(`{"player":{"id":1,"name":"A"},"records":{"overall":{"matches":0,"wins":0,"losses":0,"win_pct":null}}}`)
+	client := newTestClient(t, serveBody(body))
+
+	report, err := client.GetPlayerStats(t.Context(), 1, PlayerStatsParams{})
+	if err != nil {
+		t.Fatalf("GetPlayerStats: %v", err)
+	}
+	if report.ServeReturn != nil {
+		t.Errorf("ServeReturn = %+v, want nil when the key is absent", report.ServeReturn)
+	}
+	if report.Records == nil || report.Records.Overall.WinPct != nil {
+		t.Errorf("records = %+v", report.Records)
+	}
+}
+
+func TestPlayerProfileExtras(t *testing.T) {
+	t.Run("paid tier", func(t *testing.T) {
+		body := []byte(`{"id":1,"name":"A","height_cm":185,"doubles_ranking":{"rank":42,"points":null,"observed_on":"2026-10-19"}}`)
+		client := newTestClient(t, serveBody(body))
+		p, err := client.GetPlayer(t.Context(), 1)
+		if err != nil {
+			t.Fatalf("GetPlayer: %v", err)
+		}
+		if p.HeightCM == nil || *p.HeightCM != 185 {
+			t.Errorf("HeightCM = %v", p.HeightCM)
+		}
+		d := p.DoublesRanking
+		if d == nil || d.Rank != 42 || d.Points != nil || d.ObservedOn.Format("2006-01-02") != "2026-10-19" {
+			t.Errorf("DoublesRanking = %+v", d)
+		}
+	})
+	t.Run("free tier nulls", func(t *testing.T) {
+		client := newTestClient(t, serveBody([]byte(`{"id":1,"name":"A","height_cm":null,"doubles_ranking":null}`)))
+		p, err := client.GetPlayer(t.Context(), 1)
+		if err != nil {
+			t.Fatalf("GetPlayer: %v", err)
+		}
+		if p.HeightCM != nil || p.DoublesRanking != nil {
+			t.Errorf("want nil extras on a FREE key, got %v %v", p.HeightCM, p.DoublesRanking)
+		}
+	})
+}

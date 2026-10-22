@@ -66,3 +66,4 @@ trusting them as a contract.
 | `usage.json` | `Usage`, `UsageDay` | any (not recorded: capture key retired) |
 | `match_prices.json` | `MatchPrices`, `Price` (source/synthetic tags) | PRO |
 | `webhook_created.json`, `webhooks.json` | `Webhook` | ULTRA, direct keys |
+| `player_stats.json` | `PlayerStatsReport`, `PlayerRecords`, `PlayerServeReturn` | PRO (serve_return ULTRA) |

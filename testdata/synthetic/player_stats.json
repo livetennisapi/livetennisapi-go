@@ -1,0 +1,51 @@
+{
+  "player": {"id": 2317, "name": "Vlado Jankanj"},
+  "window": {"from": "2025-01-01T00:00:00Z", "to": "2025-12-31T23:59:59Z"},
+  "filters": {"surface": "clay", "level": null, "last": 2},
+  "records": {
+    "overall": {"matches": 30, "wins": 18, "losses": 12, "win_pct": 60.0},
+    "last_12_months": {"matches": 30, "wins": 18, "losses": 12, "win_pct": 60.0},
+    "by_surface": {"clay": {"matches": 30, "wins": 18, "losses": 12, "win_pct": 60.0}},
+    "by_venue": {"outdoor": {"matches": 28, "wins": 17, "losses": 11, "win_pct": 60.7}, "unknown": {"matches": 2, "wins": 1, "losses": 1, "win_pct": 50.0}},
+    "by_level": {"itf": {"matches": 30, "wins": 18, "losses": 12, "win_pct": 60.0}},
+    "by_season": {"2025": {"matches": 30, "wins": 18, "losses": 12, "win_pct": 60.0}},
+    "sets": {
+      "sample": {"matches": 27, "excluded": {"retired": 2, "walkover": 1, "default": 0, "score_incomplete": 0}},
+      "tiebreaks": {"played": 6, "won": 4, "lost": 2, "win_pct": 66.7},
+      "deciding_sets": {"played": 0, "won": 0, "lost": 0, "win_pct": null},
+      "after_winning_first_set": {"matches": 15, "won": 13, "lost": 2, "win_pct": 86.7},
+      "after_losing_first_set": {"matches": 12, "won": 3, "lost": 9, "win_pct": 25.0},
+      "comebacks": {"matches_lost_a_set": 14, "won": 3, "win_pct": 21.4},
+      "sets": {"won": 38, "lost": 26, "win_pct": 59.4}
+    },
+    "withdrawals": {"retired": {"given": 1, "received": 1}, "walkover": {"given": 0, "received": 1}, "default": {"given": 0, "received": 0}},
+    "excluded": {"not_singles": 4, "unresolved": 0, "abandoned": 1, "no_published_winner": 0},
+    "recent": [
+      {"match_id": 21635, "date": "2025-12-20", "scheduled_time": "2025-12-20T09:00:00Z", "tournament_id": "t-100", "tournament": "M25 Example", "round": "Final", "round_code": "F", "surface": "clay", "indoor": false, "level": "itf",
+       "opponent": {"id": 9001, "name": "Example Opponent"}, "won": true, "outcome": "completed",
+       "score": {"sets": [2, 1], "games": [[6, 3, 7], [4, 6, 5]]}},
+      {"match_id": 21600, "date": "2025-12-19", "scheduled_time": null, "tournament_id": null, "tournament": null, "round": null, "round_code": null, "surface": "clay", "indoor": null, "level": "itf",
+       "opponent": {"id": 9002, "name": null}, "won": false, "outcome": "walkover", "score": null}
+    ]
+  },
+  "serve_return": {
+    "matches": 27,
+    "matches_with_stats": 20,
+    "serve": {
+      "aces": {"total": 80, "matches": 20, "per_match": 4.0},
+      "double_faults": {"total": null, "matches": 0, "per_match": null},
+      "first_serve_in": {"numerator": 600, "denominator": 1000, "pct": 60.0, "matches": 20},
+      "first_serve_points_won": {"numerator": 420, "denominator": 600, "pct": 70.0, "matches": 20},
+      "second_serve_points_won": {"numerator": 200, "denominator": 400, "pct": 50.0, "matches": 20},
+      "service_games_won": {"numerator": 160, "denominator": 200, "pct": 80.0, "matches": 20},
+      "break_points_saved": {"numerator": 30, "denominator": 50, "pct": 60.0, "matches": 20}
+    },
+    "return": {
+      "first_serve_return_points_won": {"numerator": 180, "denominator": 600, "pct": 30.0, "matches": 20},
+      "second_serve_return_points_won": {"numerator": 200, "denominator": 400, "pct": 50.0, "matches": 20},
+      "return_games_won": {"numerator": 50, "denominator": 200, "pct": 25.0, "matches": 20},
+      "break_points_converted": {"numerator": null, "denominator": null, "pct": null, "matches": 0}
+    }
+  },
+  "meta": {"generated_at": "2026-10-22T08:00:00Z", "note": "Computed from our own completed singles matches (2023 onward). For 1968-2022 use /history/archive/career."}
+}

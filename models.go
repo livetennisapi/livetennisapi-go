@@ -235,6 +235,18 @@ type Player struct {
 	// unknown.
 	Birthday Time `json:"birthday,omitzero"`
 
+	// HeightCM is the height in centimetres from the results archive's record
+	// of the same person. Set by [Client.GetPlayer] only, on paid tiers; nil
+	// on a FREE key, when there is no archive record or no stated height.
+	// Never inferred.
+	HeightCM *int `json:"height_cm,omitempty"`
+
+	// DoublesRanking is the current official ATP/WTA doubles position. Set by
+	// [Client.GetPlayer] only, on paid tiers; nil on a FREE key, when the
+	// player is off the table or was last seen there more than 21 days ago.
+	// [Player.Ranking] stays the singles position.
+	DoublesRanking *DoublesRanking `json:"doubles_ranking,omitempty"`
+
 	// IsDoublesTeam reports whether this entry is a doubles pairing rather
 	// than an individual.
 	IsDoublesTeam bool `json:"is_doubles_team,omitempty"`

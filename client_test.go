@@ -164,6 +164,30 @@ func TestEndpointRequestShape(t *testing.T) {
 			wantPath: "/players/2317",
 		},
 		{
+			name:    "get player stats",
+			fixture: "synthetic/player_stats.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetPlayerStats(ctx, 2317, PlayerStatsParams{
+					From: "2025-01-01", To: "2025-12-31", Surface: StatsSurfaceClay, Level: TourITF, Last: 2,
+				})
+				return err
+			},
+			wantPath: "/players/2317/stats",
+			wantQuery: url.Values{
+				"from": {"2025-01-01"}, "to": {"2025-12-31"}, "surface": {"clay"}, "level": {"itf"}, "last": {"2"},
+			},
+		},
+		{
+			// A zero params value sends no query at all, so the API defaults apply.
+			name:    "get player stats defaults",
+			fixture: "synthetic/player_stats.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetPlayerStats(ctx, 2317, PlayerStatsParams{})
+				return err
+			},
+			wantPath: "/players/2317/stats",
+		},
+		{
 			name:      "list markets",
 			fixture:   "synthetic/markets.json",
 			call:      func(ctx context.Context, c *Client) error { _, err := c.ListMarkets(ctx, matchID); return err },

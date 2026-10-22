@@ -130,6 +130,7 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | `ListArchivePlayers` | `/history/archive/players` | BASIC² |
 | `GetArchiveCareer` | `/history/archive/career` | BASIC² |
 | `ListMatchEvents` | `/matches/{id}/events` | PRO |
+| `GetPlayerStats` | `/players/{id}/stats` | PRO (`ServeReturn` ULTRA) |
 | `ListMarkets` | `/markets` | PRO |
 | `GetMarketPrices` | `/markets/{id}/prices` | PRO |
 | `ListMatchPrices` | `/matches/{id}/prices` | PRO |
