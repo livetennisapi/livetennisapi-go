@@ -1617,7 +1617,7 @@ func TestPlayerStatsDecoding(t *testing.T) {
 		t.Fatalf("recent = %d rows, want 2", len(r.Recent))
 	}
 	first := r.Recent[0]
-	if !first.Won || first.Score == nil || len(first.Score.Games) != 2 || first.Score.Games[0][2] != 7 {
+	if !first.Won || first.Score == nil || len(first.Score.Games) != 2 || first.Score.Games[0][2] == nil || *first.Score.Games[0][2] != 7 {
 		t.Errorf("recent[0] = %+v", first)
 	}
 	if first.Date.Format("2006-01-02") != "2025-12-20" || first.Indoor == nil || *first.Indoor {
@@ -1665,6 +1665,50 @@ func TestPlayerStatsNullOpponent(t *testing.T) {
 	}
 	if o := recent[1].Opponent; o == nil || o.ID != 9002 || o.Name != "" {
 		t.Errorf("recent[1].Opponent = %+v, want id 9002 with no name", o)
+	}
+}
+
+// A null inside score.games means that set's games are unknown. The position
+// must survive as nil, never be dropped or read as 0, and
+// serve_return.matches_incomplete must decode alongside the other counts.
+func TestPlayerStatsNullGamesAndMatchesIncomplete(t *testing.T) {
+	body := []byte(`{"records":{"recent":[` +
+		`{"match_id":1,"opponent":{"id":9,"name":"B"},"won":true,"outcome":"retired",` +
+		`"score":{"sets":[1,0],"games":[[6,null],[4,0]]}}]},` +
+		`"serve_return":{"matches":3,"matches_with_stats":2,"matches_incomplete":1}}`)
+	client := newTestClient(t, serveBody(body))
+
+	report, err := client.GetPlayerStats(t.Context(), 1, PlayerStatsParams{})
+	if err != nil {
+		t.Fatalf("GetPlayerStats: %v", err)
+	}
+	recent := report.Records.Recent
+	if len(recent) != 1 || recent[0].Score == nil {
+		t.Fatalf("recent = %+v, want one row with a score", recent)
+	}
+	games := recent[0].Score.Games
+	if len(games) != 2 || len(games[0]) != 2 || len(games[1]) != 2 {
+		t.Fatalf("games = %v, want two sides of two sets each", games)
+	}
+	if games[0][0] == nil || *games[0][0] != 6 {
+		t.Errorf("games[0][0] = %v, want 6", games[0][0])
+	}
+	if games[0][1] != nil {
+		t.Errorf("games[0][1] = %d, want nil for an unknown set", *games[0][1])
+	}
+	if games[1][0] == nil || *games[1][0] != 4 || games[1][1] == nil || *games[1][1] != 0 {
+		t.Errorf("games[1] = %v, want [4 0]", games[1])
+	}
+
+	sr := report.ServeReturn
+	if sr == nil {
+		t.Fatal("ServeReturn missing")
+	}
+	if sr.Matches != 3 || sr.MatchesWithStats != 2 {
+		t.Errorf("matches/matches_with_stats = %d/%d, want 3/2", sr.Matches, sr.MatchesWithStats)
+	}
+	if sr.MatchesIncomplete == nil || *sr.MatchesIncomplete != 1 {
+		t.Errorf("MatchesIncomplete = %v, want 1", sr.MatchesIncomplete)
 	}
 }
 

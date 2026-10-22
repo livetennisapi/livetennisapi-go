@@ -278,8 +278,10 @@ type PlayerRecentScore struct {
 	// Sets is [player, opponent]; an element is nil when not stated.
 	Sets []*int `json:"sets,omitempty"`
 
-	// Games is [[player per set], [opponent per set]].
-	Games [][]int `json:"games,omitempty"`
+	// Games is [[player per set], [opponent per set]]. Every set position is
+	// kept; an inner element is nil when that set's games are unknown. nil is
+	// not 0.
+	Games [][]*int `json:"games,omitempty"`
 }
 
 // PlayerServeReturn is the ULTRA serve and return block of
@@ -289,6 +291,12 @@ type PlayerRecentScore struct {
 type PlayerServeReturn struct {
 	Matches          int `json:"matches"`
 	MatchesWithStats int `json:"matches_with_stats"`
+
+	// MatchesIncomplete counts matches whose measured statistics are held
+	// but stop short of the final, or cannot be judged against it. They are
+	// left out of every sum. nil when talking to a server that does not send
+	// the field.
+	MatchesIncomplete *int `json:"matches_incomplete,omitempty"`
 
 	Serve struct {
 		Aces                 PlayerStatCount `json:"aces"`

@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `PlayerRecentMatch.Opponent` is a `*PlayerRecentOpponent`, nil when the
   match row holds no opponent id. A negative `Last` returns an error before
   any request is sent. A 403 from this endpoint names PRO as the tier.
+  `PlayerRecentScore.Games` is `[][]*int`: an inner nil is a set whose games
+  are unknown, kept in position rather than dropped or read as 0.
+  `PlayerServeReturn.MatchesIncomplete` (`matches_incomplete`) counts the
+  matches whose measured statistics stop short of the final and are left out
+  of every sum; nil when the server does not send it.
 - `Player.HeightCM` (`height_cm`) and `Player.DoublesRanking`
   (`doubles_ranking`): set by `GetPlayer` on paid tiers, nil on a FREE key.
 
