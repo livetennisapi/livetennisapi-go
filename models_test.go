@@ -1645,6 +1645,39 @@ func TestPlayerStatsDecoding(t *testing.T) {
 	}
 }
 
+// The API sends opponent null when the match row holds no opponent id.
+func TestPlayerStatsNullOpponent(t *testing.T) {
+	body := []byte(`{"records":{"recent":[` +
+		`{"match_id":1,"opponent":null,"won":true,"outcome":"walkover","score":null},` +
+		`{"match_id":2,"opponent":{"id":9002,"name":null},"won":false,"outcome":"completed","score":null}]}}`)
+	client := newTestClient(t, serveBody(body))
+
+	report, err := client.GetPlayerStats(t.Context(), 1, PlayerStatsParams{})
+	if err != nil {
+		t.Fatalf("GetPlayerStats: %v", err)
+	}
+	recent := report.Records.Recent
+	if len(recent) != 2 {
+		t.Fatalf("recent = %d rows, want 2", len(recent))
+	}
+	if recent[0].Opponent != nil {
+		t.Errorf("recent[0].Opponent = %+v, want nil", recent[0].Opponent)
+	}
+	if o := recent[1].Opponent; o == nil || o.ID != 9002 || o.Name != "" {
+		t.Errorf("recent[1].Opponent = %+v, want id 9002 with no name", o)
+	}
+}
+
+// A negative Last is a caller error, so no request may be sent.
+func TestPlayerStatsRejectsNegativeLast(t *testing.T) {
+	client := newTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request to %s", r.URL)
+	}))
+	if _, err := client.GetPlayerStats(t.Context(), 1, PlayerStatsParams{Last: -1}); err == nil {
+		t.Fatal("GetPlayerStats(Last: -1) returned no error")
+	}
+}
+
 // Below ULTRA the API omits serve_return entirely; it must decode to nil.
 func TestPlayerStatsWithoutServeReturn(t *testing.T) {
 	body := []byte(`{"player":{"id":1,"name":"A"},"records":{"overall":{"matches":0,"wins":0,"losses":0,"win_pct":null}}}`)

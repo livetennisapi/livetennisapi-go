@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ULTRA adds `ServeReturn`, the summed serve and return statistics; it is nil
   below ULTRA. `PlayerStatsParams` takes `From`, `To`, `Surface`, `Level` and
   `Last`. Every percentage is a `*float64`, nil on an empty sample.
+  `PlayerRecentMatch.Opponent` is a `*PlayerRecentOpponent`, nil when the
+  match row holds no opponent id. A negative `Last` returns an error before
+  any request is sent. A 403 from this endpoint names PRO as the tier.
 - `Player.HeightCM` (`height_cm`) and `Player.DoublesRanking`
   (`doubles_ranking`): set by `GetPlayer` on paid tiers, nil on a FREE key.
 

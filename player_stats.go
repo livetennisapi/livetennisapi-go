@@ -2,6 +2,7 @@ package livetennisapi
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strconv"
 )
@@ -40,7 +41,8 @@ type PlayerStatsParams struct {
 	Level Tour
 
 	// Last is how many recent matches [PlayerRecords.Recent] lists, newest
-	// first, 1 to 50. Zero means the API default, 20.
+	// first, 1 to 50. Zero means the API default, 20. A negative value is
+	// rejected before any request is sent.
 	Last int
 }
 
@@ -75,6 +77,9 @@ func (p PlayerStatsParams) query() url.Values {
 // A doubles-team id is rejected with [ErrBadRequest] and code
 // "doubles_not_supported". For 1968–2022 use [Client.GetArchiveCareer].
 func (c *Client) GetPlayerStats(ctx context.Context, playerID int64, params PlayerStatsParams) (*PlayerStatsReport, error) {
+	if params.Last < 0 {
+		return nil, fmt.Errorf("livetennisapi: PlayerStatsParams.Last must be 0 (the API default) or 1 to 50, got %d", params.Last)
+	}
 	var out PlayerStatsReport
 	path := "/players/" + strconv.FormatInt(playerID, 10) + "/stats"
 	if err := c.get(ctx, path, params.query(), &out); err != nil {
@@ -246,10 +251,10 @@ type PlayerRecentMatch struct {
 	Indoor        *bool  `json:"indoor,omitempty"`
 	Level         string `json:"level,omitempty"`
 
-	Opponent struct {
-		ID   int64  `json:"id"`
-		Name string `json:"name,omitempty"`
-	} `json:"opponent"`
+	// Opponent is the other side of the match. It is nil when the match row
+	// holds no opponent id. Name is empty when the opponent is not on the
+	// roster read.
+	Opponent *PlayerRecentOpponent `json:"opponent,omitempty"`
 
 	// Won reports whether this player won the match.
 	Won bool `json:"won"`
@@ -260,6 +265,12 @@ type PlayerRecentMatch struct {
 	// Score is the final score turned round to this player, or nil when no
 	// score row is held.
 	Score *PlayerRecentScore `json:"score,omitempty"`
+}
+
+// PlayerRecentOpponent is the opponent of a [PlayerRecentMatch].
+type PlayerRecentOpponent struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name,omitempty"`
 }
 
 // PlayerRecentScore is a final score from the player's side.

@@ -226,6 +226,15 @@ func TestUpgradeRequiredNamesTheTier(t *testing.T) {
 			wantTier: TierUltra,
 		},
 		{
+			// /stats must not fall through to the FREE floor: it is PRO.
+			name: "player stats need PRO",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetPlayerStats(ctx, 2317, PlayerStatsParams{})
+				return err
+			},
+			wantTier: TierPro,
+		},
+		{
 			name:     "statistics need ULTRA",
 			call:     func(ctx context.Context, c *Client) error { _, err := c.GetMatchStatistics(ctx, 1); return err },
 			wantTier: TierUltra,

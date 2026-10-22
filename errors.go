@@ -89,6 +89,9 @@ var tierRequirements = []struct {
 }{
 	{"/analysis", TierUltra},
 	{"/statistics", TierUltra},
+	// /players/{id}/stats is PRO. "/stats" is not a substring of
+	// "/statistics", so the ULTRA marker above never catches it.
+	{"/stats", TierPro},
 	{"/rally", TierUltra},
 	{"/charting", TierUltra},
 	{"/ws-token", TierUltra},
