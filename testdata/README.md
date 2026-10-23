@@ -61,7 +61,7 @@ trusting them as a contract.
 | `rally_matches.json`, `rally_match.json` | `RallyMatch`, `RallyPoint`, `RallyShot` | ULTRA |
 | `charting_player.json`, `charting_match.json` | `ChartingPlayer`, `ChartingMatch` | ULTRA |
 | `history_packages.json`, `package_manifest.json` | `HistoryPackage`, `PackageFile` | PRO |
-| `ws_token.json` | `WSToken`, `WSChannels` | ULTRA |
+| `ws_token.json`, `ws_token_score_only.json` | `WSToken`, `WSChannels` (default, and minted with `?model_fields=off`) | ULTRA |
 | `tournaments.json`, `tournament.json` | `Tournament` | FREE (not recorded: capture key retired) |
 | `usage.json` | `Usage`, `UsageDay` | any (not recorded: capture key retired) |
 | `match_prices.json` | `MatchPrices`, `Price` (source/synthetic tags) | PRO |

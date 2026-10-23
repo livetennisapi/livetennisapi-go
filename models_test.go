@@ -1434,8 +1434,40 @@ func TestWSTokenDecoding(t *testing.T) {
 	if token.Channels.Match != "match:{match_id}" {
 		t.Errorf("match channel = %q", token.Channels.Match)
 	}
+	if token.ModelFields != ModelFieldsOn {
+		t.Errorf("model_fields = %q, want on", token.ModelFields)
+	}
 	if token.Channels.Slate != "slate:all" {
 		t.Errorf("slate channel = %q, want slate:all", token.Channels.Slate)
+	}
+}
+
+func TestWSTokenScoreOnlyDecoding(t *testing.T) {
+	client := newTestClient(t, serveBody(fixture(t, "synthetic/ws_token_score_only.json")))
+
+	token, err := client.GetWSTokenWithParams(t.Context(), WSTokenParams{ModelFields: ModelFieldsOff})
+	if err != nil {
+		t.Fatalf("GetWSTokenWithParams: %v", err)
+	}
+	if token.ModelFields != ModelFieldsOff {
+		t.Errorf("model_fields = %q, want off", token.ModelFields)
+	}
+	if token.Channels.Match != "match:{match_id}:score_only" {
+		t.Errorf("match channel = %q", token.Channels.Match)
+	}
+	if token.Channels.Slate != "slate:score_only" {
+		t.Errorf("slate channel = %q, want slate:score_only", token.Channels.Slate)
+	}
+}
+
+func TestWSTokenWithoutModelFieldsEcho(t *testing.T) {
+	// A server that predates the switch: the field is simply absent.
+	var token WSToken
+	if err := json.Unmarshal([]byte(`{"token":"t","channels":{"slate":"slate:all"}}`), &token); err != nil {
+		t.Fatal(err)
+	}
+	if token.ModelFields != "" {
+		t.Errorf("model_fields = %q, want empty", token.ModelFields)
 	}
 }
 

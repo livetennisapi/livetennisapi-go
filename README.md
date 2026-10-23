@@ -144,7 +144,7 @@ Every method takes a `context.Context` first and returns a typed value and an er
 | `GetMatchRally` | `/history/matches/{id}/rally` | ULTRA |
 | `GetChartingPlayer` | `/charting/players` | ULTRA |
 | `GetChartingMatch` | `/charting/matches/{id}` | ULTRA |
-| `GetWSToken` | `/ws-token` | ULTRA |
+| `GetWSToken`, `GetWSTokenWithParams` | `/ws-token` | ULTRA⁶ |
 | `CreateWebhook` | `POST /webhooks` | ULTRA⁵ |
 | `ListWebhooks` | `/webhooks` | ULTRA⁵ |
 | `DeleteWebhook` | `DELETE /webhooks/{id}` | ULTRA⁵ |
@@ -170,6 +170,19 @@ code `direct_key_required`. Up to 3 webhooks per key: the 4th registration is
 `ErrWebhookLimit` (409). The signing secret is returned exactly once, on
 registration. Webhook mutations are never retried automatically — a timed-out
 POST may still have been applied.
+
+⁶ Since 2026-10-23 every state leaves the push feed's score channels twice,
+and every `score` frame carries `model` beside `score`: `"pending"` the
+instant the state is accepted (the four model keys `win_probability_p1`,
+`danger`, `win_probability_p1_model`, `win_probability_meta` present and
+null) and `"ready"` once its model run finished, both with the same
+`score.sequence`. Dedup on `(match_id, score.sequence, model)`, apply each
+frame to the `sequence` it names, and read a frame with no `model` as
+`"ready"`. If you do not use the model fields,
+`GetWSTokenWithParams(ctx, WSTokenParams{ModelFields: ModelFieldsOff})` mints
+with `?model_fields=off`: `Channels` then names the score-only pair
+(`match:{match_id}:score_only` / `slate:score_only`), one `"off"` frame per
+state with the model keys left out, and `ModelFields` echoes `"off"`.
 
 `GetMatch` additionally embeds `Market` from PRO and `Analysis` from ULTRA, and
 `GetMatchScore` populates `WinProbabilityP1` and `Danger` on ULTRA.

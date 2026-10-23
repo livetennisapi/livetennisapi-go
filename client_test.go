@@ -472,6 +472,25 @@ func TestEndpointRequestShape(t *testing.T) {
 			wantPath: "/ws-token",
 		},
 		{
+			name:    "ws token with the default model fields sends no switch",
+			fixture: "synthetic/ws_token.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetWSTokenWithParams(ctx, WSTokenParams{})
+				return err
+			},
+			wantPath: "/ws-token",
+		},
+		{
+			name:    "ws token score only",
+			fixture: "synthetic/ws_token_score_only.json",
+			call: func(ctx context.Context, c *Client) error {
+				_, err := c.GetWSTokenWithParams(ctx, WSTokenParams{ModelFields: ModelFieldsOff})
+				return err
+			},
+			wantPath:  "/ws-token",
+			wantQuery: url.Values{"model_fields": {"off"}},
+		},
+		{
 			name:    "tournaments with search and tour",
 			fixture: "synthetic/tournaments.json",
 			call: func(ctx context.Context, c *Client) error {

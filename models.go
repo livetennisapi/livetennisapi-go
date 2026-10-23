@@ -1881,6 +1881,9 @@ type Webhook struct {
 }
 
 // WSChannels is the channel vocabulary of the push WebSocket.
+//
+// Minted with [ModelFieldsOff], Match and Slate name the score-only pair
+// instead: "match:{match_id}:score_only" and "slate:score_only".
 type WSChannels struct {
 	// Match is the per-match channel template, "match:{id}".
 	Match string `json:"match,omitempty"`
@@ -1889,12 +1892,41 @@ type WSChannels struct {
 	Slate string `json:"slate,omitempty"`
 }
 
+// ModelFields is the push feed's model-fields switch, sent as
+// ?model_fields= on /ws-token and echoed in [WSToken.ModelFields].
+type ModelFields string
+
+// The model-fields switch values.
+const (
+	// ModelFieldsOn is the default: the score channels, where since
+	// 2026-10-23 every accepted state leaves twice — a `model: "pending"`
+	// frame the instant it is accepted, with the four model keys
+	// (win_probability_p1, danger, win_probability_p1_model,
+	// win_probability_meta) present and null, and a `model: "ready"` frame
+	// once the model run finished. Dedup on (match_id, score.sequence, model).
+	ModelFieldsOn ModelFields = "on"
+
+	// ModelFieldsOff asks for the score-only channels: one frame per state,
+	// `model: "off"`, the model keys left out. Nothing waits on the model and
+	// there is no second frame. Honoured only while the feature is on
+	// server-side; the mint echoes the switch it applied.
+	ModelFieldsOff ModelFields = "off"
+)
+
+// WSTokenParams are the options of [Client.GetWSTokenWithParams].
+type WSTokenParams struct {
+	// ModelFields is the push feed's model-fields switch. Empty sends nothing
+	// and leaves the server default, [ModelFieldsOn].
+	ModelFields ModelFields
+}
+
 // WSToken is a short-lived connection token for the high-fan-out push feed,
 // from [Client.GetWSToken]. ULTRA.
 //
 // Frames on the push feed are the same allowlist score objects the polling
-// endpoints return. Mint a fresh token on every reconnect — the token
-// expires.
+// endpoints return, nested under "score" in a frame that since 2026-10-23
+// also carries "model" ("pending", "ready" or "off"; a frame without it is
+// "ready"). Mint a fresh token on every reconnect — the token expires.
 type WSToken struct {
 	// Token is the signed connection token.
 	Token string `json:"token,omitempty"`
@@ -1907,4 +1939,9 @@ type WSToken struct {
 
 	// Channels is the channel vocabulary.
 	Channels WSChannels `json:"channels,omitzero"`
+
+	// ModelFields echoes the switch the token was minted with (since
+	// 2026-10-23): [ModelFieldsOff] means Channels names the score-only
+	// streams. Empty on a server that predates the switch.
+	ModelFields ModelFields `json:"model_fields,omitempty"`
 }

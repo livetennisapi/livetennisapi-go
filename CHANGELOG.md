@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of every sum; nil when the server does not send it.
 - `Player.HeightCM` (`height_cm`) and `Player.DoublesRanking`
   (`doubles_ranking`): set by `GetPlayer` on paid tiers, nil on a FREE key.
+- **Score first.** Since 2026-10-23 every push-feed `score` frame carries
+  `model` beside `score` and a state leaves twice: `"pending"` the instant it
+  is accepted (the four model keys present and null) and `"ready"` once its
+  model run finished, both with the same `score.sequence`. Dedup on
+  `(match_id, score.sequence, model)`, and read a frame with no `model` as
+  `"ready"`. `GetWSTokenWithParams(ctx, WSTokenParams{ModelFields:
+  ModelFieldsOff})` mints with `?model_fields=off` for the score-only
+  channels (one `"off"` frame per state, model keys left out), which
+  `WSToken.Channels` then names, and `WSToken.ModelFields` echoes the switch.
+  `GetWSToken` is unchanged. New types `ModelFields` and `WSTokenParams`.
 
 ## [1.3.0] — 2026-09-02
 

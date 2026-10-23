@@ -735,9 +735,29 @@ func (c *Client) ListHistoryPackages(ctx context.Context, params HistoryPackages
 //
 // Mint a fresh token on every reconnect; the token expires after
 // [WSToken.ExpiresIn] seconds.
+//
+// Since 2026-10-23 every state leaves the score channels twice — a
+// `model: "pending"` frame the instant it is accepted (model keys null) and a
+// `model: "ready"` frame once the model run finished. Dedup on
+// (match_id, score.sequence, model). A consumer that does not use the model
+// fields calls [Client.GetWSTokenWithParams] with [ModelFieldsOff] instead.
 func (c *Client) GetWSToken(ctx context.Context) (*WSToken, error) {
+	return c.GetWSTokenWithParams(ctx, WSTokenParams{})
+}
+
+// GetWSTokenWithParams is [Client.GetWSToken] with the model-fields switch.
+// [ModelFieldsOff] sends ?model_fields=off: [WSToken.Channels] then names the
+// score-only pair ("match:{match_id}:score_only" / "slate:score_only"), one
+// `model: "off"` frame per state with the model keys left out, and
+// [WSToken.ModelFields] echoes "off".
+func (c *Client) GetWSTokenWithParams(ctx context.Context, params WSTokenParams) (*WSToken, error) {
+	q := url.Values{}
+	if params.ModelFields != "" {
+		q.Set("model_fields", string(params.ModelFields))
+	}
+
 	var out WSToken
-	if err := c.get(ctx, "/ws-token", nil, &out); err != nil {
+	if err := c.get(ctx, "/ws-token", q, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
