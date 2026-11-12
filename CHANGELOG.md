@@ -5,6 +5,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Seven `Fixture` fields from API spec 1.13.82: `Reason` (`reason`: walkover,
+  retired, cancelled, default or postponed), `MatchID` (`match_id`: the id of
+  the match the fixture became, nil until one exists), `Gender` (`gender`: men
+  or women, empty for mixed events), `IsQualifying` (`is_qualifying`),
+  `CreatedAt`, `UpdatedAt` and `PregameForecasts` (`pregame_forecasts`).
+  `IsQualifying` is `*bool`: nil means never stated, and nil is not false.
+  `PregameForecasts` is `[]Profile`, ULTRA only. It is nil when the API omits
+  the field and an empty slice when no forecast exists yet.
+- `Match.IsQualifying` and `Match.PregameForecasts`, with the same meaning.
+  `PregameForecasts` rides on ULTRA upcoming list rows only.
+
 ## [1.3.0] — 2026-09-02
 
 ### Added
