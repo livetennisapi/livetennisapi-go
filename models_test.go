@@ -899,6 +899,120 @@ func TestHasAnalysisHasMarketDecoding(t *testing.T) {
 	}
 }
 
+// IsQualifying has three values on a match: true, false and never stated.
+// PregameForecasts rides on ULTRA upcoming rows only, so an omitted field
+// must stay nil while an empty array stays an empty slice.
+func TestMatchQualifyingAndPregameForecastsDecoding(t *testing.T) {
+	var rich Match
+	body := `{"id":1,"is_qualifying":true,"pregame_forecasts":[{"win_probability_p1":0.58,"created_at":"2026-09-24T07:00:00Z"}]}`
+	if err := json.Unmarshal([]byte(body), &rich); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if rich.IsQualifying == nil || !*rich.IsQualifying {
+		t.Errorf("IsQualifying = %v, want true", rich.IsQualifying)
+	}
+	if len(rich.PregameForecasts) != 1 {
+		t.Fatalf("PregameForecasts = %d, want 1", len(rich.PregameForecasts))
+	}
+	if p := rich.PregameForecasts[0].WinProbabilityP1; p == nil || *p != 0.58 {
+		t.Errorf("WinProbabilityP1 = %v, want 0.58", p)
+	}
+
+	var main Match
+	if err := json.Unmarshal([]byte(`{"id":2,"is_qualifying":false,"pregame_forecasts":[]}`), &main); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if main.IsQualifying == nil || *main.IsQualifying {
+		t.Errorf("IsQualifying = %v, want false (present, not nil)", main.IsQualifying)
+	}
+	if main.PregameForecasts == nil || len(main.PregameForecasts) != 0 {
+		t.Errorf("PregameForecasts = %v, want an empty non-nil slice", main.PregameForecasts)
+	}
+
+	for _, body := range []string{`{"id":3}`, `{"id":4,"is_qualifying":null}`} {
+		var unstated Match
+		if err := json.Unmarshal([]byte(body), &unstated); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+		if unstated.IsQualifying != nil {
+			t.Errorf("%s: IsQualifying = %v, want nil", body, *unstated.IsQualifying)
+		}
+		if unstated.PregameForecasts != nil {
+			t.Errorf("%s: PregameForecasts = %v, want nil", body, unstated.PregameForecasts)
+		}
+	}
+}
+
+// The seven fixture fields the spec added through 1.13.82. Each nullable one
+// must survive both as a value and as null, and PregameForecasts must tell an
+// omitted field (below ULTRA) from an empty array.
+func TestFixtureAddedFieldsDecoding(t *testing.T) {
+	var full Fixture
+	body := `{"id":1,"status":"cancelled","reason":"walkover","match_id":48213,"gender":"women",` +
+		`"is_qualifying":false,"created_at":"2026-09-23T08:00:00Z","updated_at":"2026-09-24T10:30:00Z",` +
+		`"pregame_forecasts":[{"win_probability_p1":0.61,"volatility_rating":"med"}]}`
+	if err := json.Unmarshal([]byte(body), &full); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if full.Reason != "walkover" {
+		t.Errorf("Reason = %q, want walkover", full.Reason)
+	}
+	if full.MatchID == nil || *full.MatchID != 48213 {
+		t.Errorf("MatchID = %v, want 48213", full.MatchID)
+	}
+	if full.Gender != "women" {
+		t.Errorf("Gender = %q, want women", full.Gender)
+	}
+	if full.IsQualifying == nil || *full.IsQualifying {
+		t.Errorf("IsQualifying = %v, want false (present, not nil)", full.IsQualifying)
+	}
+	if got := full.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"); got != "2026-09-23T08:00:00Z" {
+		t.Errorf("CreatedAt = %s", got)
+	}
+	if got := full.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"); got != "2026-09-24T10:30:00Z" {
+		t.Errorf("UpdatedAt = %s", got)
+	}
+	if len(full.PregameForecasts) != 1 {
+		t.Fatalf("PregameForecasts = %d, want 1", len(full.PregameForecasts))
+	}
+	if p := full.PregameForecasts[0]; p.WinProbabilityP1 == nil || *p.WinProbabilityP1 != 0.61 || p.VolatilityRating != "med" {
+		t.Errorf("PregameForecasts[0] = %+v", p)
+	}
+
+	var nulls Fixture
+	body = `{"id":2,"reason":null,"match_id":null,"gender":null,"is_qualifying":null,` +
+		`"created_at":null,"updated_at":null,"pregame_forecasts":[]}`
+	if err := json.Unmarshal([]byte(body), &nulls); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if nulls.Reason != "" || nulls.Gender != "" {
+		t.Errorf("reason/gender = %q / %q, want empty", nulls.Reason, nulls.Gender)
+	}
+	if nulls.MatchID != nil {
+		t.Errorf("MatchID = %d, want nil", *nulls.MatchID)
+	}
+	if nulls.IsQualifying != nil {
+		t.Errorf("IsQualifying = %v, want nil (never stated is not false)", *nulls.IsQualifying)
+	}
+	if !nulls.CreatedAt.IsZero() || !nulls.UpdatedAt.IsZero() {
+		t.Errorf("timestamps = %v / %v, want zero", nulls.CreatedAt, nulls.UpdatedAt)
+	}
+	if nulls.PregameForecasts == nil || len(nulls.PregameForecasts) != 0 {
+		t.Errorf("PregameForecasts = %v, want an empty non-nil slice", nulls.PregameForecasts)
+	}
+
+	var lower Fixture
+	if err := json.Unmarshal([]byte(`{"id":3}`), &lower); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if lower.PregameForecasts != nil {
+		t.Errorf("absent PregameForecasts = %v, want nil", lower.PregameForecasts)
+	}
+	if lower.MatchID != nil || lower.IsQualifying != nil {
+		t.Errorf("absent MatchID/IsQualifying = %v / %v, want nil", lower.MatchID, lower.IsQualifying)
+	}
+}
+
 // The tape carries the fields backtesters live on: per-set tiebreak scores,
 // the clean-sequence point winner, and the null timestamp that marks a
 // reconstructed row. All three must survive decoding exactly.

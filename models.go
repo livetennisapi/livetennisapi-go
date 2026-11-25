@@ -408,6 +408,18 @@ type Match struct {
 	// answers 404 no_market. nil when talking to an older server.
 	HasMarket *bool `json:"has_market,omitempty"`
 
+	// IsQualifying reports whether this match belongs to the qualifying
+	// draw. It has three values: nil means never stated, and nil is not
+	// false. The qualifying draw shares the main draw's tournament name and
+	// round vocabulary, so branch on RoundCode and this flag together.
+	IsQualifying *bool `json:"is_qualifying,omitempty"`
+
+	// PregameForecasts holds the match's pre-match forecasts, oldest first,
+	// on upcoming list rows for ULTRA. The API omits the field below ULTRA
+	// and on other statuses, which leaves this nil. An empty, non-nil slice
+	// means no forecast has been written yet.
+	PregameForecasts []Profile `json:"pregame_forecasts,omitempty"`
+
 	// Tape says what point-by-point data the API holds for this match.
 	// Populated by [Client.ListHistoryMatches] and [Client.ListCompletedMatches]
 	// only; nil everywhere else.
@@ -628,6 +640,43 @@ type Fixture struct {
 
 	// Status is the fixture's status. Empty when unknown.
 	Status string `json:"status,omitempty"`
+
+	// Reason says why a fixture ended without being played out: "walkover",
+	// "retired", "cancelled", "default" or "postponed". Status folds the
+	// first four into "cancelled"; this field names which one. Empty on a
+	// scheduled, live or finished fixture.
+	Reason string `json:"reason,omitempty"`
+
+	// MatchID is the id of the match this fixture became, which every match
+	// method accepts. nil while no match exists yet — a fixture can publish
+	// days before its match. Set when found and never cleared.
+	MatchID *int64 `json:"match_id,omitempty"`
+
+	// Gender is the sex of the event, "men" or "women", in the vocabulary of
+	// the gender filter. Empty for mixed doubles and mixed team events.
+	Gender string `json:"gender,omitempty"`
+
+	// IsQualifying reports whether the fixture is in the qualifying draw. It
+	// has three values, like [Match.IsQualifying]: nil means never stated,
+	// and nil is not false. The qualifying draw is published under the main
+	// draw's tournament name, so group a schedule on RoundCode and this flag
+	// together.
+	IsQualifying *bool `json:"is_qualifying,omitempty"`
+
+	// CreatedAt is when this row first existed, UTC. A CreatedAt inside your
+	// polling window is a new row. Zero if absent.
+	CreatedAt Time `json:"created_at,omitzero"`
+
+	// UpdatedAt is when this row last changed, UTC. A moved UpdatedAt with
+	// CreatedAt unchanged is a change to a row you already hold, such as a
+	// re-listed start time. Zero if absent.
+	UpdatedAt Time `json:"updated_at,omitzero"`
+
+	// PregameForecasts holds the bound match's pre-match forecasts, oldest
+	// first, for ULTRA. The API omits the field below ULTRA, which leaves
+	// this nil. An empty, non-nil slice means the fixture has no MatchID yet
+	// or no forecast has been written.
+	PregameForecasts []Profile `json:"pregame_forecasts,omitempty"`
 }
 
 // Coverage says how a match's point-by-point tape came to exist — and
